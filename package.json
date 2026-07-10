@@ -1,0 +1,39 @@
+{
+  "name": "aero-investment-console",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k \"vite --host 0.0.0.0\" \"tsx server/index.ts\"",
+    "build": "tsc --noEmit && vite build",
+    "server": "tsx server/index.ts",
+    "db:schema": "tsx scripts/apply-schema.ts",
+    "import:companies": "tsx scripts/import-company-pool.ts",
+    "ingest:quotes": ".venv313/bin/python scripts/ingest-akshare.py",
+    "ingest:metrics": ".venv313/bin/python scripts/ingest-akshare.py --metrics-only",
+    "ingest:boards": "tsx scripts/aggregate-boards.ts",
+    "ingest:industry": ".venv313/bin/python scripts/ingest-company-industry.py",
+    "ingest:concepts": ".venv313/bin/python scripts/ingest-company-concepts.py"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "lucide-react": "^0.468.0",
+    "mysql2": "^3.11.5",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.10.2",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.5"
+  }
+}

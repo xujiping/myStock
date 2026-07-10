@@ -1,0 +1,11 @@
+node_modules
+dist
+.env
+.venv
+.venv313
+.DS_Store
+reports/*.md
+reports/*.pdf
+reports/**/*.md
+reports/**/*.pdf
+data/company-pool.txt

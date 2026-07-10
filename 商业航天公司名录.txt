@@ -1,0 +1,399 @@
+================================================================================
+                          商业航天相关公司名录
+================================================================================
+
+编制日期：2026-07-10
+数据来源：东方财富、36Kr/IT桔子、公开网络信息
+
+================================================================================
+【一、中国 A 股上市公司】（约 130 家）
+================================================================================
+
+中国卫星 600118
+航天电子 600879
+航天动力 600343
+航天机电 600151
+航天工程 603698
+航天彩虹 002389
+航天晨光 600501
+航天信息 600271
+航天科技 000901
+航天长峰 600855
+航天发展 000547
+*ST航通 600677
+中天火箭 003009
+航天宏图 688066
+中科星图 688568
+航天环宇 688523
+航宇微 300053
+华测导航 300627
+北斗星通 002151
+合众思壮 002383
+振芯科技 300101
+中海达 300177
+司南导航 688592
+航天南湖 688552
+航天软件 688562
+航天智装 300455
+中国卫通 601698
+华力创通 300045
+海格通信 002465
+盛路通信 002446
+三维通信 002115
+上海瀚讯 300762
+信科移动-U 688387
+铖昌科技 001270
+国博电子 688375
+灿勤科技 688182
+雷电微力 301050
+霍莱沃 688682
+臻镭科技 688270
+佳缘科技 301117
+多伦科技 603528
+普天科技 002544
+ST达华 002512
+ST创意 300366
+ST亚光 300123
+光威复材 300699
+中航高科 600862
+宝钛股份 600456
+西部超导 688122
+钢研高纳 300034
+抚顺特钢 600399
+菲利华 300395
+楚江新材 002171
+西部材料 002149
+图南股份 300855
+钢研纳克 300797
+有研新材 600206
+有研粉材 688456
+久立特材 002318
+永兴材料 002540
+中洲特材 300963
+万泽股份 000534
+博威合金 601137
+东方钽业 000962
+北矿科技 600980
+应流股份 603308
+宝武镁业 002182
+航天电器 002025
+火炬电子 603678
+鸿远电子 603267
+宏达电子 300726
+全信股份 300447
+通光线缆 300265
+金信诺 300252
+陕西华达 301517
+光启技术 002625
+新兴装备 002933
+晨曦航空 300581
+北摩高科 002985
+中航重机 600765
+中航光电 002179
+贵航股份 600523
+瑞玛精密 002976
+佳力奇 301586
+飞沃科技 301232
+派克新材 605123
+三角防务 300775
+爱乐达 300696
+利君股份 002651
+迈信林 688685
+华秦科技 688281
+航宇科技 688239
+航亚科技 688510
+铂力特 688333
+超卓航科 688237
+江航装备 688586
+中无人机 688297
+海特高新 002023
+威海广泰 002111
+日发精机 002520
+中航西飞 000768
+中航沈飞 600760
+中直股份 600038
+洪都航空 600316
+中航成飞 302132
+中航机载 600372
+航锦科技 000818
+隆盛科技 300680
+天银机电 300342
+斯瑞新材 688102
+泰尔股份 002347
+思科瑞 688053
+新研股份 300159
+神开股份 002278
+卫星化学 002648
+上海沪工 603131
+中科通达 688038
+和而泰 002402
+金宏气体 688106
+斯达半导 603290
+时代电气 688187
+肇民科技 301000
+
+================================================================================
+【二、中国未上市民营商业航天公司】（64 家）
+================================================================================
+
+蓝箭航天
+星河动力
+天兵科技
+东方空间
+星际荣耀
+凌空天行
+箭元科技
+九州云箭
+大航跃迁
+中科宇航
+星途探索
+深蓝航天
+翎客航天
+火箭派
+宇石空间
+庆为航空
+鑫辉空天
+馥昶空间
+银河航天
+微纳星空
+长光卫星
+天仪研究院
+垣信卫星
+格思航天
+鸿擎科技
+蓝星光域
+智星空间
+工大卫星
+轨道辰光
+中星高科
+云遥宇航
+致航科技
+星思半导体
+易动宇航
+星移联信
+斯北图
+钧天航宇
+控维通信
+星际开发
+航天驭星
+星际原点
+千乘探索
+九天微星
+国星宇航
+和德宇航
+欧科微
+微厘空间
+四象科技
+椭圆时空
+天科航空
+揽月宇航
+白鲸航线
+海丝航天
+中科航天
+天行者航天
+国电高科
+星网宇达
+航天宏图
+世纪空间
+空天引擎
+星途智联
+灵动科技
+航天恒星科技
+时代光电
+
+================================================================================
+【三、全球（海外）上市公司】（约 100+ 家）
+================================================================================
+
+========================================
+海外（主要美股）上市商业航天相关公司列表
+Overseas Listed Commercial Space Companies
+========================================
+
+【卫星通信 / Satellite Communication】
+Iridium Communications - IRDM (NASDAQ)
+Globalstar - GSAT (NYSE American)
+AST SpaceMobile - ASTS (NASDAQ)
+Intelsat - (已退市/私有化，曾INTS)
+SES S.A. - SESG (Euronext Paris) / SST (OTC)
+Eutelsat OneWeb - ETL (Euronext Paris)
+EchoStar Corporation - SATS (NASDAQ)
+Viasat - VSAT (NYSE)
+Hughes Network Systems (EchoStar子公司)
+Telesat - TSAT (TSX)
+Inmarsat (已并入Viasat)
+Thai Airways/Thaicom - THCOM (SET, 泰国)
+Gilat Satellite Networks - GILT (NASDAQ)
+Norsat International (私有化)
+Iridium 认股权证 - 无单独代码
+
+【火箭/航天制造 / Rocket & Launch Manufacturing】
+Rocket Lab USA - RKLB (NASDAQ)
+Virgin Galactic - SPCE (NYSE)
+Astra Space - (已退市/私有化，曾ASTR)
+Firefly Aerospace - (IPO中/已提交)
+Blue Origin - (未上市，私营)
+Relativity Space - (未上市，私营)
+Sierra Space - (未上市，私营)
+Momentus Space - MNTS (NASDAQ)
+Sidus Space - SIDU (NASDAQ)
+Redwire Space - RDW (NYSE)
+ABL Space Systems - (未上市，私营)
+Launcher (已并入Vast) - (未上市)
+
+【太空旅游/人类太空飞行 / Space Tourism & Human Spaceflight】
+Virgin Galactic - SPCE (NYSE)
+Axiom Space - (未上市，私营)
+World View Enterprises - (未上市，私营)
+SpaceX (Starship/航天运输) - (未上市，私营)
+
+【卫星影像与数据分析 / Earth Observation & Geospatial】
+Planet Labs - PL (NYSE)
+BlackSky Technology - BKSY (NYSE)
+Maxar Technologies (已私有化，曾MAXR)
+Satellogic - SATL (NASDAQ)
+Spire Global - SPIR (NYSE)
+EarthDaily Analytics - (未上市，私营)
+Capella Space - (未上市，私营)
+Umbra Lab - (未上市，私营)
+HawkEye 360 - (未上市，私营)
+ICEYE (芬兰/美国) - (未上市，准备IPO)
+GHGSat - (未上市，私营)
+Descartes Labs - (未上市，私营)
+Orbital Sidekick - (未上市，私营)
+Pixxel (印度) - (未上市，私营)
+SkyFi - (未上市，私营)
+
+【卫星导航与定位 / GNSS & PNT】
+Trimble - TRMB (NASDAQ)
+Garmin - GRMN (NASDAQ)
+Topcon - 7732 (东京证交所)
+
+【卫星地面段与网络设备 / Ground Systems & Equipment】
+Gilat Satellite Networks - GILT (NASDAQ)
+Kymeta - (未上市，私营)
+Swarm Technologies (已被SpaceX收购)
+Anokiwave - (未上市，私营)
+ThinKom - (未上市)
+
+【航天国防承包商 / Aerospace & Defense Contractors】
+Lockheed Martin - LMT (NYSE)
+Boeing - BA (NYSE)
+Northrop Grumman - NOC (NYSE)
+Raytheon Technologies / RTX - RTX (NYSE)
+L3Harris Technologies - LHX (NYSE)
+General Dynamics - GD (NYSE)
+Airbus - AIR (Euronext Paris)
+BAE Systems - BAESY (OTC) / BA. (LSE)
+Thales - HO (Euronext Paris)
+Leonardo - LDO (米兰证交所)
+Safran - SAF (Euronext Paris)
+Saab - SAAB-B (斯德哥尔摩)
+TransDigm Group - TDG (NYSE)
+HEICO Corporation - HEI / HEI.A (NYSE)
+Textron - TXT (NYSE)
+Spirit AeroSystems - SPR (NYSE)
+Ball Corporation (原Ball Aerospace已出售) - BALL (NYSE)
+Kratos Defense & Security Solutions - KTOS (NASDAQ)
+Aerojet Rocketdyne (已被L3Harris收购，曾AJRD)
+Maxar (已私有化)
+KBR (含航天服务) - KBR (NYSE)
+Leidos Holdings - LDOS (NYSE)
+Astronics - ATRO (NASDAQ)
+Embraer - ERJ (NYSE)
+Huntington Ingalls Industries - HII (NYSE)
+Curtiss-Wright - CW (NYSE)
+Ducommun - DCO (NYSE)
+
+【太空基础设施与在轨服务 / Space Infrastructure & In-Orbit Services】
+Redwire Space - RDW (NYSE)
+Momentus Space - MNTS (NASDAQ)
+Sidus Space - SIDU (NASDAQ)
+Astrobotic Technology - (未上市，准备IPO)
+SpaceLogistics (Northrop Grumman子公司)
+Momentus - MNTS (NASDAQ)
+Atomos Space - (未上市)
+Starfish Space - (未上市)
+ Astroscale (日本) - 专访中拟IPO
+
+【SpaceX供应链/概念相关 / SpaceX Suppliers & Ecosystem】
+Iridium Communications - IRDM (NASDAQ) (Starlink竞争/合作)
+EchoStar/SATS - SATS (NASDAQ) (卫星频谱)
+Ball Aerospace (已出售给RTX)
+Kratos Defense - KTOS (NASDAQ)
+Redwire - RDW (NYSE)
+Made In Space (Redwire子公司)
+Spaceflight Inc. (已退市)
+Terran Orbital - (已退市/私有化，曾LLAP)
+Momentus - MNTS (NASDAQ)
+Sidus Space - SIDU (NASDAQ)
+Kongsberg Gruppen - KOG (奥斯陆证交所) (航天供应商)
+Maxar (已私有化)
+SpaceX关键供应商含大量未上市公司
+
+【太空相关ETF / Space ETFs】
+ARK Space Exploration & Innovation ETF - ARKX
+Procure Space ETF - UFO
+SPDR S&P Aerospace & Defense ETF - XAR
+iShares U.S. Aerospace & Defense ETF - ITA
+Invesco Aerospace & Defense ETF - PPA
+HANetf Space Travel & Innovation - (欧洲)
+
+【低轨星座/宽带 / LEO Constellation / Broadband】
+Starlink (SpaceX子公司) - (未上市)
+Eutelsat OneWeb - ETL (Euronext Paris)
+Amazon Project Kuiper - AMZN (NASDAQ) (母公司)
+Iridium - IRDM (NASDAQ)
+Globalstar - GSAT (NYSE American)
+AST SpaceMobile - ASTS (NASDAQ)
+Viasat - VSAT (NYSE)
+EchoStar - SATS (NASDAQ)
+Hughes (EchoStar子公司)
+
+【加拿大/欧洲航天公司】
+MDA Space - MDA (多伦多证交所, 原MacDonald Dettwiler)
+Telesat - TSAT (多伦多证交所)
+SES - SESG (Euronext Paris)
+Eutelsat - ETL (Euronext Paris)
+Airbus Defence and Space (母公司 AIR)
+Thales Alenia Space (Thales/Leonardo合资)
+OHB SE - OHB (法兰克福)
+Avio - AVIO (米兰证交所) (火箭制造商)
+Rocket Factory Augsburg - RFA (未上市, 德国)
+Isar Aerospace - (未上市, 德国)
+Exotrail - (未上市, 法国)
+
+【日本/亚太航天公司】
+IHI Corporation - 7013 (东京证交所) (火箭发动机)
+Mitsubishi Heavy Industries - 7011 (东京证交所) (H3火箭)
+Mitsubishi Electric - 6503 (东京证交所) (卫星)
+NEC Corporation - 6701 (东京证交所) (卫星系统)
+NTT - 9432 (东京证交所) (Space Compass合资)
+Sky Perfect JSAT - 9412 (东京证交所) (卫星通信)
+JAXA (政府机构)
+Synspective - (未上市/准备IPO, 日本)
+AxelSpace - (未上市, 日本)
+iQPS - (未上市/IPO准备中, 日本)
+ISPACE - 9348 (东京证交所成长市场) (月球探测/着陆器)
+Astroscale - (IPO准备中, 日本)
+
+【其他相关 / Others】
+Amazon - AMZN (NASDAQ) (Project Kuiper)
+Alphabet/Google - GOOGL (NASDAQ) (卫星地图/投资)
+Meta/Facebook - META (NASDAQ) (曾探索卫星互联网)
+Trimble Navigation - TRMB (NASDAQ)
+Garmin - GRMN (NASDAQ)
+Iridium - IRDM (NASDAQ)
+Deere & Company - DE (NYSE) (精准农业/卫星)
+Orange - ORA (Euronext Paris) (卫星通信)
+Telefonica - TEF (NYSE) (卫星回传)
+Asia Satellite Telecommunications - 1135 (港交所)
+
+========================================
+注:
+1. 标注"(未上市,私营)"为公司未公开上市，不在交易所交易
+2. 标注"(已退市/私有化)"为公司曾上市但已被收购或退市
+3. 股票代码后括号内为主要上市交易所
+4. 交易所缩写：NASDAQ=纳斯达克, NYSE=纽约证券交易所, OTC=场外交易市场
+5. 数据收集时间为2026年7月，上市状态可能有变化
+========================================
