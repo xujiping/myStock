@@ -26,7 +26,7 @@ type IngestionState = {
   output: string[]
 }
 
-type SyncTaskKey = 'quotes' | 'announcements' | 'events' | 'industry' | 'concepts' | 'finance' | 'boards'
+type SyncTaskKey = 'quotes' | 'announcements' | 'events' | 'industry' | 'concepts' | 'finance' | 'boards' | 'macro' | 'report'
 type SyncTaskDefinition = {
   key: SyncTaskKey
   label: string
@@ -63,6 +63,8 @@ const syncTaskDefinitions: Record<SyncTaskKey, SyncTaskDefinition> = {
   concepts: { key: 'concepts', label: '概念归属', description: '概念板块成分反向匹配公司池，支持断点续跑。', cadence: '每周或按需', command: `${process.cwd()}/.venv313/bin/python`, args: ['scripts/ingest-company-concepts.py'], retryable: false, ingestionTaskName: 'akshare_company_concept' },
   finance: { key: 'finance', label: '季频财务', description: '归档 BaoStock 盈利能力原始字段，默认回补最近 8 个报告期。', cadence: '季报披露后', command: `${process.cwd()}/.venv313/bin/python`, args: ['scripts/ingest-baostock-finance.py'], retryable: false, ingestionTaskName: 'baostock_financial_profit' },
   boards: { key: 'boards', label: '板块聚合', description: '基于已入库最新行情计算公司池与行业板块表现。', cadence: '行情更新后', command: process.execPath, args: ['node_modules/tsx/dist/cli.mjs', 'scripts/aggregate-boards.ts'], retryable: false },
+  macro: { key: 'macro', label: '宏观指标', description: '采集 A 股指数、全球指数、汇率和回购利率等宏观指标。', cadence: '每日盘后', command: `${process.cwd()}/.venv313/bin/python`, args: ['scripts/ingest-macro.py'], retryable: false, ingestionTaskName: 'macro_indicator' },
+  report: { key: 'report', label: '日报生成', description: '汇总行情、板块、事件和宏观，生成盘后 Markdown 简报并归档。', cadence: '盘后流程末尾', command: process.execPath, args: ['node_modules/tsx/dist/cli.mjs', 'scripts/generate-report.ts'], retryable: false },
 }
 
 const activeSyncTasks = new Map<SyncTaskKey, SyncRuntime>()
@@ -72,7 +74,7 @@ let activeDailySync: DailySyncRuntime | null = null
 const DAILY_SYNC_ENABLED = process.env.DAILY_SYNC_ENABLED !== 'false'
 const DAILY_SYNC_TIME = /^([01]\d|2[0-3]):[0-5]\d$/.test(process.env.DAILY_SYNC_TIME ?? '') ? String(process.env.DAILY_SYNC_TIME) : '18:30'
 const DAILY_SYNC_TIME_ZONE = process.env.DAILY_SYNC_TIME_ZONE ?? 'Asia/Shanghai'
-const DAILY_SYNC_TASKS: SyncTaskKey[] = ['quotes', 'announcements', 'events', 'boards']
+const DAILY_SYNC_TASKS: SyncTaskKey[] = ['quotes', 'announcements', 'events', 'boards', 'macro', 'report']
 
 let ingestionProcess: ChildProcessWithoutNullStreams | null = null
 let ingestionState: IngestionState = { status: 'idle', taskName: 'akshare_daily_quote', recordsWritten: 0, warningCount: 0, output: [] }
@@ -496,9 +498,11 @@ async function getDatabaseOverview(): Promise<OverviewData> {
     ORDER BY change_pct DESC LIMIT 8
   `)
   const [macroRows] = await pool.query<RowDataPacket[]>(`
-    SELECT indicator_name, value, value_text, change_pct, unit
-    FROM aero_macro_indicator WHERE observed_date = (SELECT MAX(observed_date) FROM aero_macro_indicator)
-    ORDER BY indicator_name LIMIT 8
+    SELECT m.indicator_name, m.value, m.value_text, m.change_pct, m.unit
+    FROM aero_macro_indicator m
+    INNER JOIN (SELECT indicator_key, MAX(observed_date) AS max_date FROM aero_macro_indicator GROUP BY indicator_key) latest
+      ON latest.indicator_key = m.indicator_key AND latest.max_date = m.observed_date
+    ORDER BY m.indicator_name LIMIT 12
   `)
   const latestQuote = await pool.query<RowDataPacket[]>("SELECT DATE_FORMAT(MAX(trade_date), '%Y-%m-%d') AS trade_date FROM aero_daily_quote")
   const asOf = latestQuote[0][0]?.trade_date ? `${latestQuote[0][0].trade_date} 盘后` : '尚未导入行情数据'
@@ -771,6 +775,68 @@ app.patch('/api/companies/:code/space-businesses/:businessId', async (req, res) 
 })
 app.get('/api/events', async (_req, res) => {
   try { const data = await overview(); res.json({ items: data.events, dataMode: data.dataMode }) } catch (error) { res.status(503).json({ error: '数据库查询失败', detail: error instanceof Error ? error.message : '未知错误' }) }
+})
+
+app.get('/api/reports', async (_req, res) => {
+  if (!dbEnabled || !pool) return res.json({ items: [], dataMode: 'demo' as const })
+  try {
+    const [rows] = await pool.query<RowDataPacket[]>(`
+      SELECT DATE_FORMAT(report_date, '%Y-%m-%d') AS report_date, report_type, status, markdown_path, pdf_path,
+        DATE_FORMAT(generated_at, '%Y-%m-%d %H:%i') AS generated_at
+      FROM aero_report ORDER BY report_date DESC LIMIT 30
+    `)
+    res.json({
+      items: rows.map((row) => ({
+        reportDate: String(row.report_date),
+        reportType: row.report_type,
+        status: row.status,
+        hasMarkdown: Boolean(row.markdown_path),
+        hasPdf: Boolean(row.pdf_path),
+        generatedAt: row.generated_at,
+      })),
+      dataMode: 'mysql' as const,
+    })
+  } catch (error) { res.status(503).json({ error: '日报列表查询失败', detail: error instanceof Error ? error.message : '未知错误' }) }
+})
+
+app.get('/api/reports/:date', async (req, res) => {
+  const date = String(req.params.date ?? '').trim()
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: '日期格式不正确，应为 YYYY-MM-DD。' })
+  if (!dbEnabled || !pool) return res.status(400).json({ error: '当前为演示模式，日报需要启用 MySQL。' })
+  try {
+    const [rows] = await pool.query<RowDataPacket[]>(`
+      SELECT DATE_FORMAT(report_date, '%Y-%m-%d') AS report_date, report_type, status, markdown_path, pdf_path,
+        generated_at
+      FROM aero_report WHERE report_date=? AND report_type=? LIMIT 1
+    `, [date, 'daily'])
+    const row = rows[0]
+    if (!row) return res.status(404).json({ error: '未找到该日期的日报。' })
+    let markdown: string | null = null
+    if (row.markdown_path) {
+      try { markdown = await import('node:fs/promises').then((fs) => fs.readFile(row.markdown_path, 'utf-8')) } catch { markdown = null }
+    }
+    res.json({
+      report: {
+        reportDate: String(row.report_date), reportType: row.report_type, status: row.status,
+        hasMarkdown: Boolean(row.markdown_path), hasPdf: Boolean(row.pdf_path),
+        generatedAt: row.generated_at ? new Date(row.generated_at).toISOString() : undefined,
+      },
+      markdown,
+      dataMode: 'mysql' as const,
+    })
+  } catch (error) { res.status(503).json({ error: '日报详情查询失败', detail: error instanceof Error ? error.message : '未知错误' }) }
+})
+
+app.post('/api/reports/generate', async (_req, res) => {
+  const taskKey = 'report' as SyncTaskKey
+  if (!dbEnabled) return res.status(400).json({ error: '当前为演示模式，请先在 .env 中设置 DB_ENABLED=true。' })
+  try {
+    const result = await startSyncTask(taskKey)
+    if (!result.started) return res.status(409).json({ error: result.message })
+    return res.status(202).json({ status: 'running', message: '日报生成已启动。' })
+  } catch (error) {
+    return res.status(503).json({ error: error instanceof Error ? error.message : '日报生成启动失败。' })
+  }
 })
 
 app.listen(port, () => {

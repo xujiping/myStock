@@ -36,7 +36,7 @@ import {
   X,
 } from 'lucide-react'
 import { overviewData } from './data/mock'
-import type { Company, CompanySpaceProfile, EventItem, OverviewData, Page } from './types'
+import type { Company, CompanySpaceProfile, EventItem, OverviewData, Page, ReportSummary } from './types'
 
 type IngestionStatus = 'idle' | 'running' | 'success' | 'partial' | 'failed'
 type IngestionState = {
@@ -50,7 +50,7 @@ type IngestionState = {
 
 type SyncTaskStatus = IngestionStatus
 type SyncTask = {
-  key: 'quotes' | 'announcements' | 'events' | 'industry' | 'concepts' | 'finance' | 'boards'
+  key: 'quotes' | 'announcements' | 'events' | 'industry' | 'concepts' | 'finance' | 'boards' | 'macro' | 'report'
   label: string
   description: string
   cadence: string
@@ -82,6 +82,8 @@ type DailySyncState = {
   errorMessage?: string
 }
 type ThemeMode = 'light' | 'dark'
+type CompanySortKey = 'company' | 'sector' | 'exposure' | 'price' | 'change' | 'marketCap' | 'signal'
+type SortDirection = 'asc' | 'desc'
 
 const THEME_STORAGE_KEY = 'aero-investment-theme'
 
@@ -104,6 +106,38 @@ const navItems: { id: Page; label: string; icon: typeof LayoutDashboard }[] = [
 
 function formatChange(change: number) {
   return `${change > 0 ? '+' : ''}${change.toFixed(2)}%`
+}
+
+function parseSortableNumber(value?: string | null) {
+  if (!value) return Number.NEGATIVE_INFINITY
+  const normalized = value.replaceAll(',', '').trim()
+  const matched = normalized.match(/-?\d+(\.\d+)?/)
+  if (!matched) return Number.NEGATIVE_INFINITY
+  const base = Number(matched[0])
+  if (Number.isNaN(base)) return Number.NEGATIVE_INFINITY
+  if (normalized.includes('万亿')) return base * 1_000_000_000_000
+  if (normalized.includes('亿')) return base * 100_000_000
+  if (normalized.includes('万')) return base * 10_000
+  return base
+}
+
+function companySortValue(company: Company, sortKey: CompanySortKey) {
+  switch (sortKey) {
+    case 'company':
+      return `${company.name} ${company.code}`
+    case 'sector':
+      return `${company.spaceProfile?.businesses[0]?.secondarySector ?? ''} ${company.spaceProfile?.businesses[0]?.role ?? ''}`
+    case 'exposure':
+      return company.spaceProfile?.commercialRevenueShare ? parseSortableNumber(company.spaceProfile.commercialRevenueShare) : Number.NEGATIVE_INFINITY
+    case 'price':
+      return parseSortableNumber(company.price)
+    case 'change':
+      return company.change
+    case 'marketCap':
+      return parseSortableNumber(company.marketCap)
+    case 'signal':
+      return company.signal
+  }
 }
 
 function ToneValue({ value, tone }: { value: string; tone: 'up' | 'down' | 'flat' | 'positive' | 'negative' | 'neutral' }) {
@@ -313,7 +347,7 @@ function SyncStatusPill({ state, onOpen }: { state: IngestionState; onOpen: () =
 function Overview({ data, onNavigate }: { data: OverviewData; onNavigate: (page: Page) => void }) {
   const positiveCount = data.companies.filter((company) => company.change > 0).length
   return <>
-    <section className="hero-row"><div><div className="eyebrow"><span className="eyebrow-line" />盘后情报 · 主题航天</div><h1>今日值得关注的<br /><span>变化与证据</span></h1><p className="hero-sub">聚焦 {data.coverage}，从行情、事件和宏观背景中筛出真正改变判断的信息。</p></div><div className="hero-meta"><div className="hero-meta-label">今日数据覆盖</div><strong>{data.coverage}</strong><div className="coverage-track"><span style={{ width: '82%' }} /></div><small>{data.asOf}</small></div></section>
+    <section className="hero-row"><div><div className="eyebrow"><span className="eyebrow-line" />盘后情报 · 主题航天</div><h1 className="overview-hero-title">今日<span>关注</span></h1><p className="hero-sub">聚焦 {data.coverage}，从行情、事件和宏观背景中筛出真正改变判断的信息。</p></div><div className="hero-meta"><div className="hero-meta-label">今日数据覆盖</div><strong>{data.coverage}</strong><div className="coverage-track"><span style={{ width: '82%' }} /></div><small>{data.asOf}</small></div></section>
     <section className="metric-grid"><Metric label="公司池表现" value={`${data.companies.length ? (data.companies.reduce((sum, company) => sum + company.change, 0) / data.companies.length >= 0 ? '+' : '') : ''}${data.companies.length ? (data.companies.reduce((sum, company) => sum + company.change, 0) / data.companies.length).toFixed(2) : '--'}%`} note={`${positiveCount} 家上涨 / ${data.companies.length - positiveCount} 家下跌`} tone="up" icon={<TrendingUp size={16} />} /><Metric label="重要事件" value={String(data.events.length).padStart(2, '0')} note={`${data.events.filter((event) => event.level === '高').length} 条需要复核`} tone="amber" icon={<BellRing size={16} />} /><Metric label="减持状态" value={String(data.events.filter((event) => event.type === '减持').length).padStart(2, '0')} note="以事件中心最新状态为准" tone="down" icon={<ShieldAlert size={16} />} /><Metric label="数据新鲜度" value={data.asOf.includes('尚未') ? '--' : '已更新'} note={data.asOf} tone="cyan" icon={<Activity size={16} />} /></section>
     <section className="content-grid overview-grid"><div className="panel company-panel"><PanelHeading eyebrow="WATCHLIST / 关注池" title="公司池异动" action="查看全部" onAction={() => onNavigate('companies')} /><div className="table-head company-head"><span>公司</span><span>收盘</span><span>涨跌</span><span>趋势</span><span>信号</span></div>{data.companies.slice(0, 5).map((company) => <CompanyRow key={company.code} company={company} />)}</div><div className="panel board-panel"><PanelHeading eyebrow="SPACE PULSE / 商业航天板块脉搏" title="细分板块表现" action="公司画像" onAction={() => onNavigate('companies')} /><div className="pulse-legend"><span><i className="pulse-up" />等权涨跌</span><span>上涨 / 下跌</span><span>主要贡献</span></div>{data.boards.slice(0, 4).map((board, index) => <div className="board-row space-board-row" key={board.name}><div className="rank">0{index + 1}</div><div className="board-name"><strong>{board.name}<small className="sector-level">{board.boardType ?? '细分板块'}</small></strong><small>{board.breadth} · 领涨 {board.leader}{board.concentration ? ` · ${board.concentration}推动` : ''}</small></div><div className="board-contributor"><small>{board.exposure ?? '暴露度待确认'}</small><span>{board.contributor ? `贡献 ${board.contributor}` : '贡献待确认'}</span></div><ChangeBadge change={board.change} /></div>)}</div></section>
     <section className="content-grid lower-grid"><div className="panel observation-panel"><PanelHeading eyebrow="AI RESEARCH NOTE / 研究摘要" title="今天的三条观察" action="打开日报" onAction={() => onNavigate('reports')} />{data.observations.map((observation) => <div className="observation-row" key={observation.index}><span className={`observation-index ${observation.tone}`}>{observation.index}</span><div><strong>{observation.title}</strong><p>{observation.body}</p></div><ChevronRight size={16} /></div>)}</div><div className="panel macro-panel"><PanelHeading eyebrow="MACRO WEATHER / 宏观天气" title="外部环境" action="" />{data.macro.map((item) => <div className="macro-row" key={item.label}><span>{item.label}</span><strong>{item.value}</strong><ToneValue value={item.change} tone={item.tone} /></div>)}<div className="macro-note"><CircleHelp size={14} /> 缺失数据会以“待补充”或“暂无环比”明确标识。</div></div></section>
@@ -332,6 +366,14 @@ function CompanyRow({ company }: { company: Company }) {
   return <div className="table-row company-row"><div className="company-cell"><span className="stock-code">{company.code}</span><strong>{company.name}</strong><small>{company.concept}</small></div><strong>{company.price}</strong><ToneValue value={formatChange(company.change)} tone={company.change >= 0 ? 'positive' : 'negative'} /><Spark points={company.spark} tone={company.signalTone} /><span className={`signal signal-${company.signalTone}`}>{company.signal}</span></div>
 }
 
+function SortHeader({ label, sortKey, activeSortKey, direction, onSort }: { label: string; sortKey: CompanySortKey; activeSortKey: CompanySortKey | null; direction: SortDirection; onSort: (key: CompanySortKey) => void }) {
+  const active = activeSortKey === sortKey
+  return <button className={`sort-head-button ${active ? `active ${direction}` : ''}`} onClick={() => onSort(sortKey)}>
+    <span>{label}</span>
+    <ChevronDown size={13} />
+  </button>
+}
+
 function Companies({ companies, totalCompanies, query, setQuery }: { companies: Company[]; totalCompanies: number; query: string; setQuery: (value: string) => void }) {
   const [selectedCode, setSelectedCode] = useState<string | null>(null)
   const [detail, setDetail] = useState<CompanyDetail | null>(null)
@@ -344,11 +386,14 @@ function Companies({ companies, totalCompanies, query, setQuery }: { companies: 
   const [performance, setPerformance] = useState<'全部' | '上涨' | '下跌'>('全部')
   const [spaceSector, setSpaceSector] = useState('全部')
   const [businessRole, setBusinessRole] = useState('全部')
+  const [sortKey, setSortKey] = useState<CompanySortKey | null>(null)
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
   const levels = useMemo(() => ['全部', ...Array.from(new Set(companies.map((company) => company.level))).sort()], [companies])
   const industries = useMemo(() => ['全部', ...Array.from(new Set(companies.map((company) => company.industry))).filter((item) => item !== '待补充').sort()], [companies])
   const spaceSectors = useMemo(() => ['全部', ...Array.from(new Set(companies.flatMap((company) => company.spaceProfile?.businesses.map((business) => business.primarySector) ?? []))).sort()], [companies])
   const businessRoles = useMemo(() => ['全部', ...Array.from(new Set(companies.flatMap((company) => company.spaceProfile?.businesses.map((business) => business.role) ?? [])))], [companies])
   const selectedCompany = useMemo(() => selectedCode ? companies.find((company) => company.code === selectedCode) ?? null : null, [companies, selectedCode])
+  const sortDefaults: Record<CompanySortKey, SortDirection> = { company: 'asc', sector: 'asc', exposure: 'desc', price: 'desc', change: 'desc', marketCap: 'desc', signal: 'asc' }
   const filteredCompanies = useMemo(() => {
     const keyword = query.trim().toLowerCase()
     return companies.filter((company) => {
@@ -361,8 +406,32 @@ function Companies({ companies, totalCompanies, query, setQuery }: { companies: 
       return matchesKeyword && matchesLevel && matchesIndustry && matchesPerformance && matchesSector && matchesRole
     })
   }, [businessRole, companies, industry, level, performance, query, spaceSector])
+  const sortedCompanies = useMemo(() => {
+    if (!sortKey) return filteredCompanies
+    const directionFactor = sortDirection === 'asc' ? 1 : -1
+    return [...filteredCompanies].sort((left, right) => {
+      const leftValue = companySortValue(left, sortKey)
+      const rightValue = companySortValue(right, sortKey)
+      let result = 0
+      if (typeof leftValue === 'number' && typeof rightValue === 'number') {
+        result = leftValue - rightValue
+      } else {
+        result = String(leftValue).localeCompare(String(rightValue), 'zh-CN')
+      }
+      if (result !== 0) return result * directionFactor
+      return left.name.localeCompare(right.name, 'zh-CN')
+    })
+  }, [filteredCompanies, sortDirection, sortKey])
   const activeFilterCount = Number(level !== '全部') + Number(industry !== '全部') + Number(performance !== '全部') + Number(spaceSector !== '全部') + Number(businessRole !== '全部')
   const clearFilters = () => { setLevel('全部'); setIndustry('全部'); setPerformance('全部'); setSpaceSector('全部'); setBusinessRole('全部'); setQuery(''); setLevelMenuOpen(false) }
+  const toggleSort = (nextKey: CompanySortKey) => {
+    if (sortKey === nextKey) {
+      setSortDirection((current) => current === 'desc' ? 'asc' : 'desc')
+      return
+    }
+    setSortKey(nextKey)
+    setSortDirection(sortDefaults[nextKey])
+  }
   const closeDetail = () => {
     setSelectedCode(null)
     setDetail(null)
@@ -389,7 +458,7 @@ function Companies({ companies, totalCompanies, query, setQuery }: { companies: 
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [selectedCode])
 
-  return <><section className="page-title-row"><div><div className="eyebrow"><span className="eyebrow-line" />公司池 / {totalCompanies} 家</div><h1>航天相关公司</h1><p className="page-sub">按产业链位置、业务角色和商业航天暴露度筛选；点击公司后在右侧抽屉查看可追溯画像。</p></div><button className={`primary-button ${filtersOpen ? 'active-filter-button' : ''}`} onClick={() => setFiltersOpen((open) => !open)}><ListFilter size={15} /> 管理筛选{activeFilterCount > 0 && <em>{activeFilterCount}</em>}</button></section>{filtersOpen && <section className="filter-panel"><div className="filter-panel-top"><div><span>FILTERS / 即时生效</span><strong>公司画像筛选</strong></div><button className="text-button" onClick={clearFilters}>清空条件</button></div><div className="filter-groups"><FilterGroup label="关联等级" value={level} options={levels} onChange={setLevel} /><FilterGroup label="行业标签" value={industry} options={industries} onChange={setIndustry} /><FilterGroup label="最新涨跌" value={performance} options={['全部', '上涨', '下跌']} onChange={(value) => setPerformance(value as typeof performance)} /><FilterGroup label="一级板块" value={spaceSector} options={spaceSectors} onChange={setSpaceSector} /><FilterGroup label="业务角色" value={businessRole} options={businessRoles} onChange={setBusinessRole} /></div></section>}<div className="toolbar"><div className="search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索名称、代码、行业、板块或角色" /></div><div className="toolbar-meta"><span><span className="status-dot" /> 显示 {filteredCompanies.length} / {totalCompanies} 家</span><div className="level-menu"><button className="ghost-button" onClick={() => setLevelMenuOpen((open) => !open)}><Filter size={15} /> {level === '全部' ? '关联等级' : level} <ChevronDown size={14} /></button>{levelMenuOpen && <div className="level-menu-popover">{levels.map((item) => <button key={item} className={level === item ? 'selected' : ''} onClick={() => { setLevel(item); setLevelMenuOpen(false) }}>{item}</button>)}</div>}</div></div></div><section className="panel full-panel"><div className="table-head full-company-head"><span>公司</span><span>产业链位置 / 角色</span><span>商业航天暴露</span><span>收盘</span><span>涨跌</span><span>市值</span><span>状态</span></div>{filteredCompanies.length ? filteredCompanies.map((company) => <button key={company.code} className={`table-row full-company-row company-row-button ${selectedCode === company.code ? 'selected' : ''}`} onClick={() => void openDetail(company.code)}><div className="company-cell"><span className="stock-code">{company.code}</span><strong>{company.name}</strong><small>{company.level}</small></div><div className="tag-cell"><span>{company.spaceProfile?.businesses[0]?.secondarySector ?? '待确认'}</span><small>{company.spaceProfile?.businesses[0]?.role ?? '待确认'}</small></div><div className="profile-exposure"><strong>{company.spaceProfile?.commercialRevenueShare ?? '待确认'}</strong><small>{company.spaceProfile?.commercialRevenueConfidence ? `${company.spaceProfile.commercialRevenueConfidence}置信度` : '暂无画像'}</small></div><strong>{company.price}</strong><ToneValue value={formatChange(company.change)} tone={company.change >= 0 ? 'positive' : 'negative'} /><span className="market-cap">{company.marketCap}</span><span className={`signal signal-${company.signalTone}`}>{company.signal}</span><ChevronRight className="detail-chevron" size={15} /></button>) : <div className="company-empty"><Search size={18} /><strong>没有匹配的公司</strong><span>尝试调整筛选条件或清空搜索内容。</span><button className="ghost-button" onClick={clearFilters}>清空筛选</button></div>}</section>{selectedCode && <><button className="detail-drawer-backdrop" aria-label="关闭公司详情" onClick={closeDetail} /><aside className="detail-drawer" role="dialog" aria-modal="true" aria-label="公司详情抽屉"><div className="detail-drawer-head"><div><span>COMPANY DETAIL / 公司详情</span><strong>{detail?.company.name ?? selectedCompany?.name ?? '读取中'}</strong><small>{detail?.company.code ?? selectedCompany?.code ?? '--'} · {detail?.company.exchange ?? '研究档案'}</small></div><button className="detail-drawer-close" onClick={closeDetail} aria-label="关闭详情"><X size={16} /></button></div><div className="detail-drawer-body"><CompanyDetailPanel detail={detail} loading={loadingCode === selectedCode} error={detailError} /></div></aside></>}</>
+  return <><section className="page-title-row"><div><div className="eyebrow"><span className="eyebrow-line" />公司池 / {totalCompanies} 家</div><h1>航天相关公司</h1><p className="page-sub">按产业链位置、业务角色和商业航天暴露度筛选；点击公司后在右侧抽屉查看可追溯画像。</p></div><button className={`primary-button ${filtersOpen ? 'active-filter-button' : ''}`} onClick={() => setFiltersOpen((open) => !open)}><ListFilter size={15} /> 管理筛选{activeFilterCount > 0 && <em>{activeFilterCount}</em>}</button></section>{filtersOpen && <section className="filter-panel"><div className="filter-panel-top"><div><span>FILTERS / 即时生效</span><strong>公司画像筛选</strong></div><button className="text-button" onClick={clearFilters}>清空条件</button></div><div className="filter-groups"><FilterGroup label="关联等级" value={level} options={levels} onChange={setLevel} /><FilterGroup label="行业标签" value={industry} options={industries} onChange={setIndustry} /><FilterGroup label="最新涨跌" value={performance} options={['全部', '上涨', '下跌']} onChange={(value) => setPerformance(value as typeof performance)} /><FilterGroup label="一级板块" value={spaceSector} options={spaceSectors} onChange={setSpaceSector} /><FilterGroup label="业务角色" value={businessRole} options={businessRoles} onChange={setBusinessRole} /></div></section>}<div className="toolbar"><div className="search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索名称、代码、行业、板块或角色" /></div><div className="toolbar-meta"><span><span className="status-dot" /> 显示 {filteredCompanies.length} / {totalCompanies} 家</span><div className="level-menu"><button className="ghost-button" onClick={() => setLevelMenuOpen((open) => !open)}><Filter size={15} /> {level === '全部' ? '关联等级' : level} <ChevronDown size={14} /></button>{levelMenuOpen && <div className="level-menu-popover">{levels.map((item) => <button key={item} className={level === item ? 'selected' : ''} onClick={() => { setLevel(item); setLevelMenuOpen(false) }}>{item}</button>)}</div>}</div></div></div><section className="panel full-panel"><div className="table-head full-company-head"><SortHeader label="公司" sortKey="company" activeSortKey={sortKey} direction={sortDirection} onSort={toggleSort} /><SortHeader label="产业链位置 / 角色" sortKey="sector" activeSortKey={sortKey} direction={sortDirection} onSort={toggleSort} /><SortHeader label="商业航天暴露" sortKey="exposure" activeSortKey={sortKey} direction={sortDirection} onSort={toggleSort} /><SortHeader label="收盘" sortKey="price" activeSortKey={sortKey} direction={sortDirection} onSort={toggleSort} /><SortHeader label="涨跌" sortKey="change" activeSortKey={sortKey} direction={sortDirection} onSort={toggleSort} /><SortHeader label="市值" sortKey="marketCap" activeSortKey={sortKey} direction={sortDirection} onSort={toggleSort} /><SortHeader label="状态" sortKey="signal" activeSortKey={sortKey} direction={sortDirection} onSort={toggleSort} /></div>{sortedCompanies.length ? sortedCompanies.map((company) => <button key={company.code} className={`table-row full-company-row company-row-button ${selectedCode === company.code ? 'selected' : ''}`} onClick={() => void openDetail(company.code)}><div className="company-cell"><span className="stock-code">{company.code}</span><strong>{company.name}</strong><small>{company.level}</small></div><div className="tag-cell"><span>{company.spaceProfile?.businesses[0]?.secondarySector ?? '待确认'}</span><small>{company.spaceProfile?.businesses[0]?.role ?? '待确认'}</small></div><div className="profile-exposure"><strong>{company.spaceProfile?.commercialRevenueShare ?? '待确认'}</strong><small>{company.spaceProfile?.commercialRevenueConfidence ? `${company.spaceProfile.commercialRevenueConfidence}置信度` : '暂无画像'}</small></div><strong>{company.price}</strong><ToneValue value={formatChange(company.change)} tone={company.change >= 0 ? 'positive' : 'negative'} /><span className="market-cap">{company.marketCap}</span><span className={`signal signal-${company.signalTone}`}>{company.signal}</span><ChevronRight className="detail-chevron" size={15} /></button>) : <div className="company-empty"><Search size={18} /><strong>没有匹配的公司</strong><span>尝试调整筛选条件或清空搜索内容。</span><button className="ghost-button" onClick={clearFilters}>清空筛选</button></div>}</section>{selectedCode && <><button className="detail-drawer-backdrop" aria-label="关闭公司详情" onClick={closeDetail} /><aside className="detail-drawer" role="dialog" aria-modal="true" aria-label="公司详情抽屉"><div className="detail-drawer-head"><div><span>COMPANY DETAIL / 公司详情</span><strong>{detail?.company.name ?? selectedCompany?.name ?? '读取中'}</strong><small>{detail?.company.code ?? selectedCompany?.code ?? '--'} · {detail?.company.exchange ?? '研究档案'}</small></div><button className="detail-drawer-close" onClick={closeDetail} aria-label="关闭详情"><X size={16} /></button></div><div className="detail-drawer-body"><CompanyDetailPanel detail={detail} loading={loadingCode === selectedCode} error={detailError} /></div></aside></>}</>
 }
 
 function FilterGroup({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (value: string) => void }) { return <div className="filter-group"><span>{label}</span><div>{options.map((item) => <button key={item} className={value === item ? 'selected' : ''} onClick={() => onChange(item)}>{item}</button>)}</div></div> }
@@ -447,8 +516,13 @@ function DailyQuoteBarChart({ quotes }: { quotes: CompanyDetail['quotes'] }) {
       </div>}
       <div className="quote-chart-grid" aria-label="最近 20 个交易日日行情柱状图">
         {visibleQuotes.map((item, index) => {
-          const height = maxClose === minClose ? 48 : Math.round(((item.close - minClose) / (maxClose - minClose)) * 124 + 28)
-          const wickHeight = maxHigh === minLow ? 20 : Math.max(18, Math.round(((item.high - item.low) / Math.max(0.01, maxHigh - minLow)) * 132))
+          const priceRange = Math.max(0.01, maxHigh - minLow)
+          const candleTrackHeight = 144
+          const highOffset = ((maxHigh - item.high) / priceRange) * candleTrackHeight
+          const lowOffset = ((maxHigh - item.low) / priceRange) * candleTrackHeight
+          const bodyTop = ((maxHigh - Math.max(item.open, item.close)) / priceRange) * candleTrackHeight
+          const bodyBottom = ((maxHigh - Math.min(item.open, item.close)) / priceRange) * candleTrackHeight
+          const bodyHeight = Math.max(6, bodyBottom - bodyTop)
           const tone = (item.change ?? 0) >= 0 ? 'up' : 'down'
           const active = index === hoveredIndex
           return <button
@@ -459,8 +533,10 @@ function DailyQuoteBarChart({ quotes }: { quotes: CompanyDetail['quotes'] }) {
             onBlur={() => setHoveredIndex((current) => current === index ? null : current)}
             aria-label={`${item.date} 收盘 ${item.close.toFixed(2)}，${item.change === null ? '涨跌幅待确认' : `涨跌幅 ${formatChange(item.change)}`}`}
           >
-            <span className="quote-bar-wick" style={{ height: `${wickHeight}px` }} />
-            <span className="quote-bar-body" style={{ height: `${height}px` }} />
+            <span className="quote-bar-track">
+              <span className="quote-bar-line" style={{ top: `${highOffset}px`, height: `${Math.max(10, lowOffset - highOffset)}px` }} />
+              <span className="quote-bar-body" style={{ top: `${bodyTop}px`, height: `${bodyHeight}px` }} />
+            </span>
             <small>{index === 0 || index === visibleQuotes.length - 1 || index % 5 === 0 ? item.date.slice(5) : ''}</small>
           </button>
         })}
@@ -546,8 +622,104 @@ function SyncCenter({ tasks, selectedTask, setSelectedTask, logs, dailySync, err
 
 function TerminalSquareIcon() { return <Database size={20} /> }
 
+type ReportDetail = {
+  report: ReportSummary
+  markdown: string | null
+  dataMode: 'demo' | 'mysql'
+} & { error?: string }
+
 function Reports() {
-  return <><section className="page-title-row"><div><div className="eyebrow"><span className="eyebrow-line" />DAILY BRIEF / 日报归档</div><h1>盘后简报</h1><p className="page-sub">每日自动生成 Markdown 与 PDF，保留当天研究依据和结论。</p></div><button className="primary-button"><FileText size={15} /> 生成今日简报</button></section><section className="report-layout"><div className="panel report-index"><PanelHeading eyebrow="ARCHIVE" title="最近报告" action="" />{['2026-07-10', '2026-07-09', '2026-07-08', '2026-07-07'].map((date, index) => <button className={`report-date ${index === 0 ? 'active' : ''}`} key={date}><span><CalendarDays size={15} />{date}</span><small>{index === 0 ? '已生成 · 18:42' : '已归档'}</small><ChevronRight size={15} /></button>)}</div><div className="panel report-preview"><div className="report-preview-top"><span className="report-label"><FileText size={14} /> MARKDOWN PREVIEW</span><div><button className="ghost-button"><FileText size={14} /> Markdown</button><button className="ghost-button"><FileDown size={14} /> PDF</button></div></div><div className="report-paper"><div className="paper-kicker">轨道观察 · 盘后简报 / 2026.07.10</div><h2>航天相关 A 股<br /><span>今日研究摘要</span></h2><div className="paper-rule" /><p className="paper-lead">商业航天板块今日上涨 2.38%，强度连续三日跑赢基准。公司池内 31 家上涨，4 条重大事项已完成归类。</p><div className="paper-grid"><div><span>01 / 板块</span><strong>商业航天 +2.38%</strong></div><div><span>02 / 风险</span><strong>航宇微 · 减持中</strong></div><div><span>03 / 宏观</span><strong>OMO 净投放 1,250 亿</strong></div></div><div className="paper-foot">数据截止 18:42 · 信息工具，不构成投资建议</div></div></div></section></>
+  const [reports, setReports] = useState<ReportSummary[]>([])
+  const [selectedDate, setSelectedDate] = useState<string | null>(null)
+  const [detail, setDetail] = useState<ReportDetail | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [generating, setGenerating] = useState(false)
+  const [error, setError] = useState('')
+
+  const loadReports = async () => {
+    try {
+      const response = await fetch('/api/reports')
+      if (!response.ok) throw new Error('日报列表暂不可用')
+      const payload = await response.json() as { items: ReportSummary[] }
+      setReports(payload.items)
+      if (!selectedDate && payload.items[0]) {
+        setSelectedDate(payload.items[0].reportDate)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '日报列表暂不可用')
+    }
+  }
+
+  const loadDetail = async (date: string) => {
+    setLoading(true); setDetail(null); setError('')
+    try {
+      const response = await fetch(`/api/reports/${date}`)
+      const payload = await response.json() as ReportDetail & { error?: string }
+      if (!response.ok) throw new Error(payload.error ?? '日报详情暂不可用')
+      setDetail(payload)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '日报详情暂不可用')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const generateReport = async () => {
+    setGenerating(true); setError('')
+    try {
+      const response = await fetch('/api/reports/generate', { method: 'POST' })
+      const payload = await response.json() as { error?: string }
+      if (!response.ok) throw new Error(payload.error ?? '日报生成启动失败')
+      const timer = window.setInterval(async () => {
+        await loadReports()
+        const statusResponse = await fetch('/api/sync/tasks')
+        if (statusResponse.ok) {
+          const statusPayload = await statusResponse.json() as { items: SyncTask[] }
+          const reportTask = statusPayload.items.find((task) => task.key === 'report')
+          if (reportTask && !reportTask.running) {
+            window.clearInterval(timer)
+            setGenerating(false)
+            if (selectedDate) await loadDetail(selectedDate)
+          }
+        }
+      }, 2500)
+    } catch (err) {
+      setGenerating(false)
+      setError(err instanceof Error ? err.message : '日报生成启动失败')
+    }
+  }
+
+  useEffect(() => { void loadReports() }, [])
+  useEffect(() => { if (selectedDate) void loadDetail(selectedDate) }, [selectedDate])
+
+  return <>
+    <section className="page-title-row"><div><div className="eyebrow"><span className="eyebrow-line" />DAILY BRIEF / 日报归档</div><h1>盘后简报</h1><p className="page-sub">每日盘后自动生成 Markdown 简报，归档当天研究依据和结论。</p></div><button className="primary-button" disabled={generating} onClick={() => void generateReport()}><FileText size={15} />{generating ? '生成中…' : '生成今日简报'}</button></section>
+    {error && <div className="data-warning"><AlertTriangle size={15} /> {error}</div>}
+    <section className="report-layout">
+      <div className="panel report-index">
+        <PanelHeading eyebrow="ARCHIVE" title="最近报告" action="" />
+        {reports.length ? reports.map((report) => (
+          <button className={`report-date ${selectedDate === report.reportDate ? 'active' : ''}`} key={report.reportDate} onClick={() => setSelectedDate(report.reportDate)}>
+            <span><CalendarDays size={15} />{report.reportDate}</span>
+            <small>{report.status === 'generated' ? `已生成${report.generatedAt ? ` · ${report.generatedAt.slice(11, 16)}` : ''}` : report.status}</small>
+            <ChevronRight size={15} />
+          </button>
+        )) : <div className="empty-detail">暂无已归档日报，点击"生成今日简报"创建。</div>}
+      </div>
+      <div className="panel report-preview">
+        <div className="report-preview-top">
+          <span className="report-label"><FileText size={14} /> {selectedDate ? `MARKDOWN · ${selectedDate}` : 'MARKDOWN PREVIEW'}</span>
+          <div>
+            <button className="ghost-button"><FileText size={14} /> Markdown</button>
+            <button className="ghost-button" disabled><FileDown size={14} /> PDF</button>
+          </div>
+        </div>
+        {loading ? <div className="empty-detail">正在读取日报内容…</div>
+          : detail?.markdown ? <pre className="report-paper report-markdown">{detail.markdown}</pre>
+          : <div className="report-paper"><div className="paper-kicker">{selectedDate ? `轨道观察 · ${selectedDate}` : '轨道观察 · 盘后简报'}</div><div className="empty-detail">{detail?.error ?? '该日报暂无 Markdown 内容，请先生成。'}</div></div>}
+      </div>
+    </section>
+  </>
 }
 
 export default App

@@ -15,6 +15,8 @@
     "ingest:announcements": ".venv313/bin/python scripts/ingest-announcements.py",
     "extract:events": ".venv313/bin/python scripts/extract-events.py",
     "ingest:boards": "tsx scripts/aggregate-boards.ts",
+    "ingest:macro": ".venv313/bin/python scripts/ingest-macro.py",
+    "generate:report": "tsx scripts/generate-report.ts",
     "ingest:industry": ".venv313/bin/python scripts/ingest-company-industry.py",
     "ingest:concepts": ".venv313/bin/python scripts/ingest-company-concepts.py",
     "ingest:finance": ".venv313/bin/python scripts/ingest-baostock-finance.py"

@@ -39,6 +39,22 @@
 - 事件抽取：按公告标题关键词规则分类为减持、增持、回购、解禁、定增、业绩、股权、诉讼、订单、投资、并购等类型。事件以 `(company_id, announcement_id, event_type)` 为业务唯一键，重复运行时更新而非重复插入。
 - 减持状态机：首次发现减持计划 → `即将减持`；标题含进展/实施 → `减持中`；含完成/完毕 → `减持完毕`；计划到期未完成 → `计划到期未完成`。状态变化时追加 `aero_event_status_history`，相同状态不重复记录。
 
+## 日报归档
+
+- 日报生成脚本从已入库的行情、板块、事件和宏观数据中汇总，用规则模板生成 Markdown 简报。
+- 文件写入 `reports/YYYY-MM-DD/daily.md`（目录由 `REPORT_DIR` 环境变量控制，默认 `reports`）。
+- `aero_report` 按 `report_date + report_type`（`daily`）去重，重复生成时用 `ON DUPLICATE KEY UPDATE` 更新 `markdown_path`、`content_hash` 和 `generated_at`。
+- `content_hash` 存 Markdown 全文的 SHA-256，用于检测内容是否变化。
+
+## 宏观指标
+
+- `aero_macro_indicator` 按 `indicator_key + observed_date` 复合主键去重，支持 upsert 幂等。
+- A 股指数（上证/深证/创业板/科创50）通过腾讯日线接口获取，含收盘价和环比涨跌幅。
+- 全球指数（日经225/德国DAX/英国富时100）通过新浪环球市场接口获取；标普500/纳斯达克/恒生指数因东财推送节点限制暂未接入。
+- 美元/人民币汇率取央行中间价，缺失时用中行折算价回退。
+- FR007 回购利率取中国外汇交易中心回购定盘利率，`value_text` 存"利率 X.XX%"文本。
+- 后端查询取最新观测日的全部指标，前端"宏观天气"面板按 `value_text`（优先）或 `value + unit` 展示。
+
 ## 公司池来源
 
 当前整理文件为 `/Users/xujiping/Documents/aiProject/AI 快速项目/myStock/商业航天公司名录.txt`。导入脚本只处理文件中的“中国 A 股上市公司”章节，目前识别到 122 家 A 股公司；未上市民营公司和海外公司不会进入本项目公司池。

@@ -101,6 +101,14 @@ export type CompanySpaceProfile = {
   evidences?: EvidenceItem[]
   revisions?: RevisionItem[]
 }
+export type ReportSummary = {
+  reportDate: string
+  reportType: string
+  status: string
+  hasMarkdown: boolean
+  hasPdf: boolean
+  generatedAt?: string
+}
 
 export type OverviewData = {
   asOf: string
