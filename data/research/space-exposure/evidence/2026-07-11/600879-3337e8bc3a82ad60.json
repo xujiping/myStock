@@ -1,0 +1,25 @@
+{
+  "evidenceId": "3337e8bc3a82ad60",
+  "code": "600879",
+  "companyName": "航天电子",
+  "sourceName": "巨潮资讯",
+  "sourceUrl": "http://www.cninfo.com.cn/new/disclosure/detail?stockCode=600879&announcementId=1225375482",
+  "publishedAt": "2026-06-18",
+  "title": "航天电子关于陕西航天时代导航设备有限公司将惯性导航机械式平台相关资产重组至陕西航天导航设备有限公司的关联交易公告",
+  "excerpt": "全资子公司陕西航天时代导航设备有限公司将惯性导航机械式平台业务相关资产以协议转让方式重组至控股股东下属陕西航天导航设备有限公司，转让价格2,074.87万元。惯性导航机械式平台被光学惯性产品大量替代，业务大幅减少，部分专用设备闲置。此举为进一步聚焦航天电子信息主业。",
+  "sourceLevel": "official_filing",
+  "facts": [
+    {
+      "field": "product_application",
+      "value": "剥离惯性导航机械式平台业务，聚焦航天电子信息主业。受让方陕西导航主营航天器导航与控制设备及精密机电产品",
+      "unit": "文本",
+      "period": "2026年6月"
+    },
+    {
+      "field": "contract_amount",
+      "value": "2,074.87万元（资产转让价格）",
+      "unit": "万元",
+      "period": "2026年6月"
+    }
+  ]
+}

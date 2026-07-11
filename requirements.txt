@@ -1,2 +1,4 @@
 akshare>=1.18,<2
+baostock>=0.8.80,<1
+tushare>=1.4.24,<2
 PyMySQL>=1.1,<2

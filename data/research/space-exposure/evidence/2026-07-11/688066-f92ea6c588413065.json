@@ -1,0 +1,31 @@
+{
+  "evidenceId": "f92ea6c588413065",
+  "code": "688066",
+  "companyName": "*ST航图(航天宏图)",
+  "sourceName": "巨潮资讯",
+  "sourceUrl": "http://www.cninfo.com.cn/new/disclosure/detail?stockCode=688066&announcementId=1225374449",
+  "publishedAt": "2026-06-17",
+  "title": "航天宏图信息技术股份有限公司关于2025年年度报告的信息披露监管问询函的回复公告",
+  "excerpt": "2025年8月，公司与北京天田国际遥感科技有限公司签署《卫星及地面系统采购合同》，合同金额为97,348.88万元人民币。公司需向客户提供卫星及地面系统。宏图一号卫星2025年折旧摊销3,559.03万元，数据资产主要为在轨卫星获取并经加工处理形成的SAR数据资源。2025年度总收入44,781.31万元，其中特种领域5,584.07万元（占12.47%），民用领域39,197.23万元（占87.53%）。",
+  "sourceLevel": "official_filing",
+  "facts": [
+    {
+      "field": "contract_amount",
+      "value": "97,348.88万元（卫星及地面系统采购合同）",
+      "unit": "万元",
+      "period": "2025年度签署"
+    },
+    {
+      "field": "commercial_revenue",
+      "value": "44,781.31万元（总收入，含特种和民用，未单独披露商业航天收入占比）",
+      "unit": "万元",
+      "period": "2025年度"
+    },
+    {
+      "field": "product_application",
+      "value": "在轨SAR卫星数据资产、宏图一号卫星、卫星及地面系统供应",
+      "unit": "文本",
+      "period": "2025年度"
+    }
+  ]
+}

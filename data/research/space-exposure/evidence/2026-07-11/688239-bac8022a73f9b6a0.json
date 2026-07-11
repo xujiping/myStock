@@ -1,0 +1,25 @@
+{
+  "evidenceId": "bac8022a73f9b6a0",
+  "code": "688239",
+  "companyName": "航宇科技",
+  "sourceName": "巨潮资讯",
+  "sourceUrl": "http://www.cninfo.com.cn/new/disclosure/detail?stockCode=688239&announcementId=1225417240",
+  "publishedAt": "2026-07-10",
+  "title": "贵州航宇科技发展股份有限公司关于签署航空发动机转动件长期供货协议的自愿性披露公告",
+  "excerpt": "公司与某国际商用航空发动机领域客户（世界500强企业）签署长期供货协议，供应某型号航空发动机低压转子部件（高级别转动件）。自2028年批产开始计算，8年协议期内预计采购总金额约2.4亿元人民币。注意：该协议为航空发动机而非火箭/航天发动机，属航空领域，不属于商业航天范畴。",
+  "sourceLevel": "official_filing",
+  "facts": [
+    {
+      "field": "contract_amount",
+      "value": "约2.4亿元（8年协议期预计采购总金额，航空发动机转动件）",
+      "unit": "元",
+      "period": "2028-2035年"
+    },
+    {
+      "field": "product_application",
+      "value": "航空发动机低压转子部件（高级别转动件），非航天/火箭领域",
+      "unit": "文本",
+      "period": "2028年起"
+    }
+  ]
+}

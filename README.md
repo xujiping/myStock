@@ -27,6 +27,7 @@ pnpm ingest:quotes
 
 ```bash
 pnpm import:companies -- "/Users/xujiping/Documents/aiProject/AI 快速项目/myStock/商业航天公司名录.txt"
+pnpm seed:data-sources
 ```
 
 真实凭据只放在 `.env`，不要提交到 Git。当前项目所有数据库表使用 `aero_` 前缀。
@@ -46,6 +47,12 @@ pnpm import:companies -- "/Users/xujiping/Documents/aiProject/AI 快速项目/my
 执行 `pnpm seed:space-sectors` 初始化 9 个一级板块和 36 个二级板块。公司画像的数据模型覆盖商业航天收入暴露、普通主营业务、公司与二级板块的多对多关联、业务角色、价值量区间、产业链及公司重要性、证据与人工维护历史。
 
 接口 `PUT /api/companies/:code/space-profile` 可维护公司级画像，`POST /api/companies/:code/space-businesses` 可新增细分板块关联，`PATCH /api/companies/:code/space-businesses/:businessId` 可修订已有关联；三者均写入 `aero_space_profile_revision`。每日 `pnpm ingest:boards` 会同时计算二级与一级板块的等权/市值暴露加权涨跌、涨跌广度、领涨领跌、主要贡献公司和集中度。
+
+Hermes 等研究任务将每日候选结果写入 `data/research/space-exposure/inbox/YYYY-MM-DD.json`，原始证据写入同目录下的 `evidence/YYYY-MM-DD/`。先运行 `pnpm db:schema` 创建证据表；随后用 `pnpm ingest:space-exposure -- --date YYYY-MM-DD` 预检，用 `pnpm ingest:space-exposure -- --date YYYY-MM-DD --apply` 正式导入。脚本只处理标记为“可入库”、且每条候选均能找到原始证据的记录；导入成功后候选文件会移至 `processed/`，并为画像更新保留修订历史。
+
+## 统一数据源架构
+
+AKShare、BaoStock、Hermes 和未来的网页搜索/其他智能体均作为“数据源”登记，不直接与业务表耦合。先执行 `pnpm seed:data-sources` 初始化数据源目录；每种渠道声明其可提供的能力与输出契约，运行记录和原始产物统一存入 `aero_data_source_run` 与 `aero_data_artifact`。详情见 [数据源架构](docs/DATA-SOURCE-ARCHITECTURE.md)。
 
 ## 公告与事件
 

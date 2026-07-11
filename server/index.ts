@@ -1,10 +1,13 @@
 import 'dotenv/config'
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
+import { readFile, readdir, stat } from 'node:fs/promises'
+import path from 'node:path'
 import { createInterface } from 'node:readline'
 import cors from 'cors'
 import express from 'express'
 import type { ResultSetHeader, RowDataPacket } from 'mysql2'
 import { dbEnabled, pool } from './db'
+import { ensureDataSource, finishDataSourceRun, startDataSourceRun } from '../scripts/data-sources'
 import { demoProfiles, overviewData as demoOverview } from '../src/data/mock'
 import type { Company, CompanySpaceProfile, DataState, EventItem, OverviewData } from '../src/types'
 
@@ -26,16 +29,17 @@ type IngestionState = {
   output: string[]
 }
 
-type SyncTaskKey = 'quotes' | 'announcements' | 'events' | 'industry' | 'concepts' | 'finance' | 'boards' | 'macro' | 'report'
+type SyncTaskKey = 'quotes' | 'announcements' | 'events' | 'industry' | 'concepts' | 'finance' | 'boards' | 'macro' | 'report' | 'space_exposure'
 type SyncTaskDefinition = {
   key: SyncTaskKey
   label: string
   description: string
   cadence: string
   command: string
-  args: string[]
+  args: string[] | (() => string[])
   retryable: boolean
   ingestionTaskName?: string
+  dataSource?: { key: string, capabilityKey: string, managedByTask?: boolean }
 }
 type SyncRuntime = {
   process: ChildProcessWithoutNullStreams
@@ -43,6 +47,7 @@ type SyncRuntime = {
   output: string[]
   warnings: number
   recordsWritten: number
+  dataSourceRun?: { id: number, key: string }
   resolve: (result: SyncTaskCompletion) => void
 }
 type SyncTaskCompletion = { status: IngestionStatus; code: number | null }
@@ -54,21 +59,32 @@ type DailySyncRuntime = {
   currentTask?: SyncTaskKey
   retryAt?: string
 }
+type HermesEvidenceStatus = {
+  date: string
+  status: 'completed' | 'evidence_found' | 'partial' | 'waiting' | 'invalid'
+  message: string
+  candidate: { exists: boolean, location: 'inbox' | 'processed' | null, count: number | null, updatedAt?: string }
+  evidence: { exists: boolean, count: number, updatedAt?: string }
+  report: { exists: boolean, updatedAt?: string }
+  lastSuccessfulAt?: string
+}
 
 const syncTaskDefinitions: Record<SyncTaskKey, SyncTaskDefinition> = {
-  quotes: { key: 'quotes', label: '行情与估值', description: '逐公司补齐最新交易日的日线、市场估值与换手率。', cadence: '每日盘后', command: `${process.cwd()}/.venv313/bin/python`, args: ['scripts/ingest-akshare.py'], retryable: true, ingestionTaskName: 'akshare_daily_quote' },
-  announcements: { key: 'announcements', label: '公告采集', description: '东财个股公告为主源，巨潮资讯为非科创板回退，按来源和外部键去重。', cadence: '每日盘后', command: `${process.cwd()}/.venv313/bin/python`, args: ['scripts/ingest-announcements.py'], retryable: true, ingestionTaskName: 'cninfo_announcement' },
-  events: { key: 'events', label: '事件抽取', description: '从公告标题规则分类重大事项，解析减持字段并维护状态机。', cadence: '公告更新后', command: `${process.cwd()}/.venv313/bin/python`, args: ['scripts/extract-events.py'], retryable: false, ingestionTaskName: 'rule_event_extraction' },
-  industry: { key: 'industry', label: '行业归属', description: '仅补齐缺失行业；BaoStock 优先，东方财富为兼容回退。', cadence: '按需 / 低频', command: `${process.cwd()}/.venv313/bin/python`, args: ['scripts/ingest-company-industry.py'], retryable: false, ingestionTaskName: 'eastmoney_company_industry' },
-  concepts: { key: 'concepts', label: '概念归属', description: '概念板块成分反向匹配公司池，支持断点续跑。', cadence: '每周或按需', command: `${process.cwd()}/.venv313/bin/python`, args: ['scripts/ingest-company-concepts.py'], retryable: false, ingestionTaskName: 'akshare_company_concept' },
-  finance: { key: 'finance', label: '季频财务', description: '归档 BaoStock 盈利能力原始字段，默认回补最近 8 个报告期。', cadence: '季报披露后', command: `${process.cwd()}/.venv313/bin/python`, args: ['scripts/ingest-baostock-finance.py'], retryable: false, ingestionTaskName: 'baostock_financial_profit' },
-  boards: { key: 'boards', label: '板块聚合', description: '基于已入库最新行情计算公司池与行业板块表现。', cadence: '行情更新后', command: process.execPath, args: ['node_modules/tsx/dist/cli.mjs', 'scripts/aggregate-boards.ts'], retryable: false },
-  macro: { key: 'macro', label: '宏观指标', description: '采集 A 股指数、全球指数、汇率和回购利率等宏观指标。', cadence: '每日盘后', command: `${process.cwd()}/.venv313/bin/python`, args: ['scripts/ingest-macro.py'], retryable: false, ingestionTaskName: 'macro_indicator' },
-  report: { key: 'report', label: '日报生成', description: '汇总行情、板块、事件和宏观，生成盘后 Markdown 简报并归档。', cadence: '盘后流程末尾', command: process.execPath, args: ['node_modules/tsx/dist/cli.mjs', 'scripts/generate-report.ts'], retryable: false },
+  quotes: { key: 'quotes', label: '行情与估值', description: '逐公司补齐最新交易日的日线、市场估值与换手率。', cadence: '每日盘后', command: `${process.cwd()}/.venv313/bin/python`, args: ['scripts/ingest-akshare.py'], retryable: true, ingestionTaskName: 'akshare_daily_quote', dataSource: { key: 'akshare', capabilityKey: 'market_quote' } },
+  announcements: { key: 'announcements', label: '公告采集', description: '东财个股公告为主源，巨潮资讯为非科创板回退，按来源和外部键去重。', cadence: '每日盘后', command: `${process.cwd()}/.venv313/bin/python`, args: ['scripts/ingest-announcements.py'], retryable: true, ingestionTaskName: 'cninfo_announcement', dataSource: { key: 'akshare', capabilityKey: 'announcement' } },
+  events: { key: 'events', label: '事件抽取', description: '从公告标题规则分类重大事项，解析减持字段并维护状态机。', cadence: '公告更新后', command: `${process.cwd()}/.venv313/bin/python`, args: ['scripts/extract-events.py'], retryable: false, ingestionTaskName: 'rule_event_extraction', dataSource: { key: 'local_data_pipeline', capabilityKey: 'event_extraction' } },
+  industry: { key: 'industry', label: '行业归属', description: '仅补齐缺失行业；BaoStock 优先，东方财富为兼容回退。', cadence: '按需 / 低频', command: `${process.cwd()}/.venv313/bin/python`, args: ['scripts/ingest-company-industry.py'], retryable: false, ingestionTaskName: 'eastmoney_company_industry', dataSource: { key: 'baostock', capabilityKey: 'industry_classification' } },
+  concepts: { key: 'concepts', label: '概念归属', description: '概念板块成分反向匹配公司池，支持断点续跑。', cadence: '每周或按需', command: `${process.cwd()}/.venv313/bin/python`, args: ['scripts/ingest-company-concepts.py'], retryable: false, ingestionTaskName: 'akshare_company_concept', dataSource: { key: 'akshare', capabilityKey: 'concept_membership' } },
+  finance: { key: 'finance', label: '季频财务', description: '归档 BaoStock 盈利能力原始字段，默认回补最近 8 个报告期。', cadence: '季报披露后', command: `${process.cwd()}/.venv313/bin/python`, args: ['scripts/ingest-baostock-finance.py'], retryable: false, ingestionTaskName: 'baostock_financial_profit', dataSource: { key: 'baostock', capabilityKey: 'financial_profit' } },
+  boards: { key: 'boards', label: '板块聚合', description: '基于已入库最新行情计算公司池与行业板块表现。', cadence: '行情更新后', command: process.execPath, args: ['node_modules/tsx/dist/cli.mjs', 'scripts/aggregate-boards.ts'], retryable: false, dataSource: { key: 'local_data_pipeline', capabilityKey: 'board_aggregation' } },
+  macro: { key: 'macro', label: '宏观指标', description: '采集 A 股指数、全球指数、汇率和回购利率等宏观指标。', cadence: '每日盘后', command: `${process.cwd()}/.venv313/bin/python`, args: ['scripts/ingest-macro.py'], retryable: false, ingestionTaskName: 'macro_indicator', dataSource: { key: 'akshare', capabilityKey: 'macro_indicator' } },
+  report: { key: 'report', label: '日报生成', description: '汇总行情、板块、事件和宏观，生成盘后 Markdown 简报并归档。', cadence: '盘后流程末尾', command: process.execPath, args: ['node_modules/tsx/dist/cli.mjs', 'scripts/generate-report.ts'], retryable: false, dataSource: { key: 'local_data_pipeline', capabilityKey: 'daily_report' } },
+  space_exposure: { key: 'space_exposure', label: 'Hermes 取证导入', description: '校验 Hermes 研究包，保存原始证据，并只采纳标记为可入库的业务结论。', cadence: 'Hermes 完成后自动 / 可手动', command: process.execPath, args: () => ['node_modules/tsx/dist/cli.mjs', 'scripts/import-space-exposure.ts', '--apply', '--date', shanghaiDate()], retryable: false, dataSource: { key: 'hermes_research_agent', capabilityKey: 'business_exposure_evidence', managedByTask: true } },
 }
 
 const activeSyncTasks = new Map<SyncTaskKey, SyncRuntime>()
 const retryAttempts = new Map<SyncTaskKey, number>()
+const hermesAutoImportMarks = new Set<string>()
 let activeDailySync: DailySyncRuntime | null = null
 
 const DAILY_SYNC_ENABLED = process.env.DAILY_SYNC_ENABLED !== 'false'
@@ -80,6 +96,65 @@ let ingestionProcess: ChildProcessWithoutNullStreams | null = null
 let ingestionState: IngestionState = { status: 'idle', taskName: 'akshare_daily_quote', recordsWritten: 0, warningCount: 0, output: [] }
 
 const isoOrNull = (value: Date | string | null | undefined) => value ? new Date(value).toISOString() : undefined
+
+function shanghaiDate() {
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date())
+  const get = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? ''
+  return `${get('year')}-${get('month')}-${get('day')}`
+}
+
+async function fileInfo(filePath: string) {
+  try {
+    const info = await stat(filePath)
+    return { exists: info.isFile(), updatedAt: info.isFile() ? info.mtime.toISOString() : undefined }
+  } catch {
+    return { exists: false, updatedAt: undefined }
+  }
+}
+
+async function hermesEvidenceStatus(): Promise<HermesEvidenceStatus> {
+  const date = shanghaiDate()
+  const root = path.join(process.cwd(), 'data', 'research', 'space-exposure')
+  const inboxPath = path.join(root, 'inbox', `${date}.json`)
+  const processedPath = path.join(root, 'processed', `${date}.json`)
+  const reportPath = path.join(root, 'reports', `${date}.md`)
+  const evidencePath = path.join(root, 'evidence', date)
+  const statePath = path.join(root, 'state.json')
+  const inbox = await fileInfo(inboxPath)
+  const processed = inbox.exists ? { exists: false, updatedAt: undefined } : await fileInfo(processedPath)
+  const report = await fileInfo(reportPath)
+  let evidenceFiles: string[] = []
+  let evidenceUpdatedAt: string | undefined
+  try {
+    const entries = await readdir(evidencePath, { withFileTypes: true })
+    evidenceFiles = entries.filter((entry) => entry.isFile() && entry.name.endsWith('.json')).map((entry) => entry.name)
+    evidenceUpdatedAt = (await stat(evidencePath)).mtime.toISOString()
+  } catch {
+    // Hermes 尚未创建当天的证据目录。
+  }
+  let candidateCount: number | null = null
+  let lastSuccessfulAt: string | undefined
+  let invalid = false
+  try {
+    const candidatePath = inbox.exists ? inboxPath : processed.exists ? processedPath : null
+    if (candidatePath) {
+      const payload = JSON.parse(await readFile(candidatePath, 'utf8')) as { records?: unknown[] }
+      if (!Array.isArray(payload.records)) invalid = true
+      else candidateCount = payload.records.length
+    }
+    const state = JSON.parse(await readFile(statePath, 'utf8')) as { lastSuccessfulAt?: unknown }
+    if (typeof state.lastSuccessfulAt === 'string') lastSuccessfulAt = state.lastSuccessfulAt
+  } catch {
+    // 缺少候选或状态文件时保留等待状态，不将其视为服务故障。
+  }
+  const candidate = { exists: inbox.exists || processed.exists, location: inbox.exists ? 'inbox' as const : processed.exists ? 'processed' as const : null, count: candidateCount, updatedAt: inbox.updatedAt ?? processed.updatedAt }
+  const evidence = { exists: evidenceFiles.length > 0, count: evidenceFiles.length, updatedAt: evidenceUpdatedAt }
+  if (invalid) return { date, status: 'invalid', message: '候选文件格式异常，暂不可导入。', candidate, evidence, report, lastSuccessfulAt }
+  if (candidate.exists && report.exists && lastSuccessfulAt?.slice(0, 10) === date) return { date, status: 'completed', message: evidence.count ? `今日取证已完成，发现 ${evidence.count} 条原始证据。` : '今日取证已完成，未发现新增原始证据。', candidate, evidence, report, lastSuccessfulAt }
+  if (evidence.count) return { date, status: 'evidence_found', message: `已发现 ${evidence.count} 条原始证据，Hermes 仍在整理候选或日报。`, candidate, evidence, report, lastSuccessfulAt }
+  if (candidate.exists || report.exists || lastSuccessfulAt) return { date, status: 'partial', message: '检测到部分取证产物，尚未达到今日完成条件。', candidate, evidence, report, lastSuccessfulAt }
+  return { date, status: 'waiting', message: '尚未发现 Hermes 今日的取证文件。', candidate, evidence, report, lastSuccessfulAt }
+}
 
 async function latestIngestionState(): Promise<IngestionState> {
   if (!pool) return ingestionState
@@ -130,6 +205,8 @@ function parseSyncProgress(line: string) {
   if (completed) return { recordsWritten: Number(completed[1]), warnings: Number(completed[2]) }
   const board = line.match(/已写入 (\d+) 条公司池板块数据/)
   if (board) return { recordsWritten: Number(board[1]), warnings: 0 }
+  const spaceExposure = line.match(/已导入 (\d+) 条候选/)
+  if (spaceExposure) return { recordsWritten: Number(spaceExposure[1]), warnings: 0 }
   return null
 }
 
@@ -149,12 +226,30 @@ async function startSyncTask(taskKey: SyncTaskKey, retryAttempt = 0, autoRetry =
     [task.key, task.label],
   )
   const syncRunId = Number(result.insertId)
-  const child = spawn(task.command, task.args, { cwd: process.cwd(), env: process.env })
+  let dataSourceRun: SyncRuntime['dataSourceRun']
+  let sourceTrackingMessage: string | undefined
+  if (task.dataSource && !task.dataSource.managedByTask) {
+    try {
+      const source = await ensureDataSource(pool as never, task.dataSource.key)
+      const sourceRunId = await startDataSourceRun(pool as never, {
+        sourceId: source.id,
+        capabilityKey: task.dataSource.capabilityKey,
+        runKey: `sync-${task.key}-${syncRunId}`,
+        triggerType: fromDailySync ? 'scheduled_pipeline' : 'manual',
+      })
+      dataSourceRun = { id: sourceRunId, key: task.dataSource.key }
+    } catch (error) {
+      sourceTrackingMessage = `数据源运行记录未写入：${error instanceof Error ? error.message : '未知错误'}`
+    }
+  }
+  const taskArgs = typeof task.args === 'function' ? task.args() : task.args
+  const child = spawn(task.command, taskArgs, { cwd: process.cwd(), env: process.env })
   let resolveCompletion: (result: SyncTaskCompletion) => void = () => undefined
   const completion = new Promise<SyncTaskCompletion>((resolve) => { resolveCompletion = resolve })
-  const runtime: SyncRuntime = { process: child, syncRunId, output: [], warnings: 0, recordsWritten: 0, resolve: resolveCompletion }
+  const runtime: SyncRuntime = { process: child, syncRunId, output: [], warnings: 0, recordsWritten: 0, dataSourceRun, resolve: resolveCompletion }
   activeSyncTasks.set(taskKey, runtime)
   await appendSyncLog(syncRunId, 'info', `任务已启动：${task.label}（第 ${retryAttempt + 1} 次尝试）`)
+  if (sourceTrackingMessage) await appendSyncLog(syncRunId, 'info', sourceTrackingMessage)
 
   const append = (line: string, level: 'info' | 'warn' | 'error') => {
     if (!line.trim()) return
@@ -182,6 +277,16 @@ async function startSyncTask(taskKey: SyncTaskKey, retryAttempt = 0, autoRetry =
         'UPDATE aero_sync_run SET status=?, finished_at=CURRENT_TIMESTAMP, records_written=?, warning_count=?, retry_at=?, error_message=? WHERE id=?',
         [status, runtime.recordsWritten, runtime.warnings, retryAt, lastError, syncRunId],
       )
+      if (runtime.dataSourceRun) {
+        await finishDataSourceRun(pool as never, runtime.dataSourceRun.id, {
+          status,
+          artifactsFound: 0,
+          recordsProposed: runtime.recordsWritten,
+          recordsAdopted: runtime.recordsWritten,
+          warningCount: runtime.warnings,
+          errorMessage: lastError,
+        })
+      }
       await appendSyncLog(syncRunId, failed ? 'error' : runtime.warnings ? 'warn' : 'info', failed ? `任务退出，代码 ${code ?? '未知'}。` : '任务已结束。')
     } catch {
       // 进程结束后的记录失败不再影响子进程生命周期。
@@ -307,8 +412,23 @@ async function scheduleDailySync() {
   if (!rows.length) await runDailySync('scheduled')
 }
 
+async function scheduleHermesEvidenceImport() {
+  if (!pool || activeDailySync || activeSyncTasks.size || ingestionProcess) return
+  const evidence = await hermesEvidenceStatus()
+  if (evidence.status !== 'completed' || evidence.candidate.location !== 'inbox') return
+  const mark = `${evidence.date}:${evidence.candidate.updatedAt ?? ''}`
+  if (hermesAutoImportMarks.has(mark)) return
+  hermesAutoImportMarks.add(mark)
+  const result = await startSyncTask('space_exposure', 0, false)
+  if (!result.started) console.warn(`Hermes 自动导入未启动：${result.message ?? '未知原因'}`)
+}
+
 async function syncTaskViews() {
-  if (!pool) return Object.values(syncTaskDefinitions).map((task) => ({ ...task, status: 'idle', recordsWritten: 0, warningCount: 0, running: false }))
+  if (!pool) return Object.values(syncTaskDefinitions).map((task) => ({
+    key: task.key, label: task.label, description: task.description, cadence: task.cadence,
+    sourceKey: task.dataSource?.key, capabilityKey: task.dataSource?.capabilityKey,
+    status: 'idle', recordsWritten: 0, warningCount: 0, running: false, retryEnabled: task.retryable, retryAttempt: 0,
+  }))
   const [rows] = await pool.query<RowDataPacket[]>(`
     SELECT r.* FROM aero_sync_run r
     INNER JOIN (SELECT task_key, MAX(id) AS id FROM aero_sync_run GROUP BY task_key) latest ON latest.id = r.id
@@ -326,6 +446,7 @@ async function syncTaskViews() {
     const runtime = activeSyncTasks.get(task.key)
     return {
       key: task.key, label: task.label, description: task.description, cadence: task.cadence,
+      sourceKey: task.dataSource?.key, capabilityKey: task.dataSource?.capabilityKey,
       status: runtime ? 'running' : row?.status ?? externalRow?.status ?? 'idle', running: Boolean(runtime), syncRunId: runtime?.syncRunId ?? (row ? Number(row.id) : undefined),
       startedAt: runtime ? undefined : isoOrNull(row?.started_at ?? externalRow?.started_at), finishedAt: runtime ? undefined : isoOrNull(row?.finished_at ?? externalRow?.finished_at),
       recordsWritten: runtime?.recordsWritten ?? Number(row?.records_written ?? externalRow?.records_written ?? 0), warningCount: runtime?.warnings ?? Number(row?.warning_count ?? (externalRow?.error_message ? String(externalRow.error_message).split('\n').filter(Boolean).length : 0)),
@@ -539,6 +660,56 @@ app.get('/api/health', async (_req, res) => {
   res.json({ ok: true, database, mode: dbEnabled ? 'mysql' : 'demo' })
 })
 
+app.get('/api/data-sources', async (_req, res) => {
+  if (!pool) return res.json({ items: [] })
+  try {
+    const [rows] = await pool.query<RowDataPacket[]>(`
+      SELECT s.id, s.source_key, s.source_name, s.source_type, s.access_mode, s.trust_level, s.status, s.description,
+        COUNT(DISTINCT c.id) AS capability_count,
+        SUBSTRING_INDEX(GROUP_CONCAT(DISTINCT c.capability_key ORDER BY c.priority SEPARATOR ','), ',', 8) AS capabilities
+      FROM aero_data_source s
+      LEFT JOIN aero_data_source_capability c ON c.source_id=s.id AND c.is_active=1
+      GROUP BY s.id
+      ORDER BY s.status='active' DESC, s.source_type, s.source_name
+    `)
+    const [runRows] = await pool.query<RowDataPacket[]>(`
+      SELECT r.id, r.source_id, r.capability_key, r.status, r.started_at, r.finished_at,
+        r.artifacts_found, r.records_proposed, r.records_adopted, r.warning_count, r.error_message
+      FROM aero_data_source_run r
+      INNER JOIN (SELECT source_id, MAX(id) AS id FROM aero_data_source_run GROUP BY source_id) latest ON latest.id=r.id
+    `)
+    const latestRuns = new Map(runRows.map((row) => [Number(row.source_id), row]))
+    res.json({ items: rows.map((row) => ({
+      key: row.source_key, name: row.source_name, type: row.source_type, accessMode: row.access_mode, trustLevel: row.trust_level, status: row.status,
+      description: row.description ?? undefined,
+      capabilityCount: Number(row.capability_count ?? 0), capabilities: String(row.capabilities ?? '').split(',').filter(Boolean),
+      lastRun: latestRuns.get(Number(row.id)) ? (() => {
+        const run = latestRuns.get(Number(row.id))!
+        return {
+          id: Number(run.id), capabilityKey: String(run.capability_key), status: String(run.status), startedAt: isoOrNull(run.started_at), finishedAt: isoOrNull(run.finished_at),
+          artifactsFound: Number(run.artifacts_found ?? 0), recordsProposed: Number(run.records_proposed ?? 0), recordsAdopted: Number(run.records_adopted ?? 0),
+          warningCount: Number(run.warning_count ?? 0), errorMessage: run.error_message ? String(run.error_message) : undefined,
+        }
+      })() : undefined,
+    })) })
+  } catch (error) {
+    res.status(503).json({ error: '无法读取数据源目录', detail: error instanceof Error ? error.message : '未知错误' })
+  }
+})
+
+app.get('/api/data-sources/hermes/prompt', async (_req, res) => {
+  const relativePath = 'docs/agent-prompts/hermes-space-exposure.md'
+  const promptPath = path.join(process.cwd(), relativePath)
+  try {
+    const [content, info] = await Promise.all([readFile(promptPath, 'utf8'), stat(promptPath)])
+    const id = content.match(/^id:\s*(.+)$/m)?.[1]?.trim() ?? 'hermes-space-exposure'
+    const version = content.match(/^version:\s*(.+)$/m)?.[1]?.trim() ?? '未标记版本'
+    res.json({ id, version, path: relativePath, updatedAt: info.mtime.toISOString(), content })
+  } catch (error) {
+    res.status(503).json({ error: '无法读取 Hermes 派发提示词', detail: error instanceof Error ? error.message : '未知错误' })
+  }
+})
+
 app.get('/api/ingestion/status', async (_req, res) => {
   try {
     res.json(await latestIngestionState())
@@ -616,6 +787,14 @@ app.get('/api/sync/daily', async (_req, res) => {
     res.json(await dailySyncView())
   } catch (error) {
     res.status(503).json({ error: '无法读取盘后同步状态', detail: error instanceof Error ? error.message : '未知错误' })
+  }
+})
+
+app.get('/api/sync/hermes-evidence', async (_req, res) => {
+  try {
+    res.json(await hermesEvidenceStatus())
+  } catch (error) {
+    res.status(503).json({ error: '无法读取 Hermes 取证文件', detail: error instanceof Error ? error.message : '未知错误' })
   }
 })
 
@@ -842,5 +1021,6 @@ app.post('/api/reports/generate', async (_req, res) => {
 app.listen(port, () => {
   console.log(`Aero API listening on http://localhost:${port} (${dbEnabled ? 'mysql' : 'demo'} mode)`)
   void scheduleDailySync()
-  setInterval(() => { void scheduleDailySync() }, 60_000)
+  void scheduleHermesEvidenceImport()
+  setInterval(() => { void scheduleDailySync(); void scheduleHermesEvidenceImport() }, 60_000)
 })

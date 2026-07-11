@@ -1,0 +1,19 @@
+{
+  "evidenceId": "371c3b3437ed4bf2",
+  "code": "600501",
+  "companyName": "航天晨光",
+  "sourceName": "巨潮资讯",
+  "sourceUrl": "http://www.cninfo.com.cn/new/disclosure/detail?stockCode=600501&announcementId=1225418768",
+  "publishedAt": "2026-07-11",
+  "title": "航天晨光股份有限公司2026年半年度业绩预告",
+  "excerpt": "预计2026年半年度归母净利润约-4,000万元，扣非净利润约-5,000万元，同比减亏。亏损原因：营业收入不足导致固定成本难以摊薄，部分压力容器、特种装备业务新签订单仍处于投产期，尚未形成规模收入。未单独披露商业航天相关收入。",
+  "sourceLevel": "official_filing",
+  "facts": [
+    {
+      "field": "commercial_revenue",
+      "value": "未单独披露商业航天收入。2026年半年度整体预亏约-4,000万元",
+      "unit": "万元",
+      "period": "2026年半年度"
+    }
+  ]
+}

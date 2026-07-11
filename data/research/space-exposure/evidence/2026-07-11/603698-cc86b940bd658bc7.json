@@ -1,0 +1,19 @@
+{
+  "evidenceId": "cc86b940bd658bc7",
+  "code": "603698",
+  "companyName": "航天工程",
+  "sourceName": "巨潮资讯",
+  "sourceUrl": "http://www.cninfo.com.cn/new/disclosure/detail?stockCode=603698&announcementId=1225366812",
+  "publishedAt": "2026-06-13",
+  "title": "航天长征化学工程股份有限公司关于控股子公司减资暨关联交易的公告",
+  "excerpt": "控股子公司航天氢能有限公司同比例减资，注册资本由131,000.00万元减少至107,420.00万元。航天氢能已实现气体运营项目长周期安全稳定运行。注意：航天工程主业为航天长征化学工程（煤气化技术），航天氢能为氢能业务，均非传统商业航天（火箭/卫星）范畴。",
+  "sourceLevel": "official_filing",
+  "facts": [
+    {
+      "field": "project_progress",
+      "value": "航天氢能减资，涉氢能业务而非火箭/卫星商业航天",
+      "unit": "文本",
+      "period": "2026年6月"
+    }
+  ]
+}

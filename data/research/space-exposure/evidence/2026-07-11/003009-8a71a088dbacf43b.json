@@ -1,0 +1,31 @@
+{
+  "evidenceId": "8a71a088dbacf43b",
+  "code": "003009",
+  "companyName": "中天火箭",
+  "sourceName": "巨潮资讯",
+  "sourceUrl": "http://www.cninfo.com.cn/new/disclosure/detail?stockCode=003009&announcementId=1225408845",
+  "publishedAt": "2026-07-02",
+  "title": "陕西中天火箭技术股份有限公司关于调整2026年度日常关联交易预计事项的公告",
+  "excerpt": "调整2026年度日常关联交易预计额度，调整前81,364.00万元，调整后117,864.00万元。向关联人销售产品由58,610.00万元调整为80,855.00万元。其中向西安航天商业火箭动力技术有限责任公司销售产品，表明公司参与了商业火箭动力领域的供应链。主要关联方同属中国航天科技集团有限公司。",
+  "sourceLevel": "official_filing",
+  "facts": [
+    {
+      "field": "customer_relationship",
+      "value": "向西安航天商业火箭动力技术有限责任公司销售产品（关联交易预计范围内）",
+      "unit": "文本",
+      "period": "2026年度预计"
+    },
+    {
+      "field": "contract_amount",
+      "value": "2026年度日常关联交易预计总额调整为117,864.00万元（含全部关联方，非单指商业航天）",
+      "unit": "万元",
+      "period": "2026年度预计"
+    },
+    {
+      "field": "product_application",
+      "value": "公司属中国航天科技集团，业务涉及火箭相关产品（防雹增雨火箭、探空火箭等），与西安航天商业火箭动力技术有限责任公司存在供应关系",
+      "unit": "文本",
+      "period": "2026年度"
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "evidenceId": "5c1335426c348387",
+  "code": "688523",
+  "companyName": "航天环宇",
+  "sourceName": "巨潮资讯",
+  "sourceUrl": "http://www.cninfo.com.cn/new/disclosure/detail?stockCode=688523&announcementId=1225387223",
+  "publishedAt": "2026-06-26",
+  "title": "航天环宇关于募投项目延期的公告",
+  "excerpt": "公司将募投项目'军民两用通信、测控与测试装备产业化项目'达到预定可使用状态时间由2026年6月30日延期至2026年12月31日。该项目拟投入募集资金50,000.00万元，截至2026年5月31日累计投入46,690.52万元，投入进度93.38%。公司全称为湖南航天环宇通信科技股份有限公司。",
+  "sourceLevel": "official_filing",
+  "facts": [
+    {
+      "field": "project_progress",
+      "value": "军民两用通信、测控与测试装备产业化项目延期至2026年12月31日，投入进度93.38%",
+      "unit": "文本",
+      "period": "2026年6月"
+    },
+    {
+      "field": "contract_amount",
+      "value": "50,000.00万元（募投项目总投资）",
+      "unit": "万元",
+      "period": "2023年IPO"
+    }
+  ]
+}

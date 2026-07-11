@@ -17,8 +17,14 @@
 - `aero_report`：Markdown/PDF 日报文件索引。
 - `aero_ingestion_run`：盘后任务运行状态和错误信息。
 - `aero_sync_pipeline_run`：每日盘后流程的触发来源、当前步骤、重试时间和最终状态。
+- `aero_data_source`：API、智能体、搜索等系统数据源的统一注册目录。
+- `aero_data_source_capability`：数据源可提供的数据能力、输出契约与优先级。
+- `aero_data_source_run`：每次数据源采集/提交的运行状态、候选数与采纳数。
+- `aero_data_artifact`：数据源提交的原始产物及其内容哈希。
+- `aero_data_artifact_link`：原始产物与业务证据、画像等实体的溯源关联。
 - `aero_space_sector`：商业航天一、二级板块字典。
 - `aero_company_space_profile`：公司级商业航天收入暴露、非航天核心业务和研究摘要。
+- `aero_company_space_profile_evidence`：公司级画像的原始研究证据，以公司和证据哈希去重。
 - `aero_company_space_business`：公司与二级板块的业务关联、角色、占比区间、价值量和重要性。
 - `aero_space_business_evidence`：业务关联的可追溯证据来源。
 - `aero_space_profile_revision`：人工新增、修改、确认和恢复时的前后值与原因。
@@ -32,6 +38,7 @@
 - 业务事实：`company_id + fact_type + fact_hash`。
 - 日报：`report_date + report_type`。
 - 业务画像：当前有效关联以 `company_id + sector_id + is_current` 读取；历史变更保存在 `aero_space_profile_revision`，不覆盖删除。
+- 商业航天研究证据：`company_id + evidence_key`；Hermes 原始成果先写入 `data/research/space-exposure/inbox/`，通过导入脚本校验后才进入正式表。
 
 ## 公告与事件
 

@@ -1,0 +1,31 @@
+{
+  "evidenceId": "df5901a9657e26f3",
+  "code": "600118",
+  "companyName": "中国卫星",
+  "sourceName": "巨潮资讯",
+  "sourceUrl": "http://www.cninfo.com.cn/new/disclosure/detail?stockCode=600118&announcementId=1225391625",
+  "publishedAt": "2026-06-27",
+  "title": "中国卫星关于全资子公司航天东方红卫星有限公司放弃参股公司增资优先认缴权暨关联交易的公告",
+  "excerpt": "全资子公司航天东方红卫星有限公司持有深圳市航天新源科技有限公司10%股权（200万元出资额）。航天新源主营电源、电源控制器、功率变换和驱动系统产品，2025年营业收入12,002.19万元，净利润516.94万元。航天新源拟公开挂牌引入新投资者增资，航天东方红放弃优先认缴权。",
+  "sourceLevel": "official_filing",
+  "facts": [
+    {
+      "field": "customer_relationship",
+      "value": "航天东方红（全资子公司）持有航天新源10%股权，航天新源主营航天电源/电源控制器",
+      "unit": "文本",
+      "period": "2026年6月"
+    },
+    {
+      "field": "commercial_revenue",
+      "value": "航天新源2025年营业收入12,002.19万元（参股公司，非并表）",
+      "unit": "万元",
+      "period": "2025年度"
+    },
+    {
+      "field": "product_application",
+      "value": "航天新源从事电源、电源控制器、功率变换和驱动系统产品的研发与销售，属航天供应链",
+      "unit": "文本",
+      "period": "2025年度"
+    }
+  ]
+}

@@ -13,6 +13,8 @@ from urllib.request import Request, urlopen
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
+from baostock_client import BaoStockClient
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -58,8 +60,8 @@ def market_symbol(stock_code: str) -> str:
     return f"{'sh' if code.startswith(('5', '6', '9')) else 'bj' if code.startswith(('4', '8')) else 'sz'}{code}"
 
 
-def fetch_history(ak: object, stock_code: str, start: date, end: date):
-    """优先腾讯日线；当前环境无法连接东财时仍可稳定采集。"""
+def fetch_history(ak: object, baostock: BaoStockClient, stock_code: str, start: date, end: date):
+    """腾讯主源、BaoStock 独立回退、东方财富最后回退。"""
     try:
         frame = ak.stock_zh_a_hist_tx(
             symbol=market_symbol(stock_code), start_date=start.strftime("%Y%m%d"), end_date=end.strftime("%Y%m%d"), adjust="",
@@ -71,14 +73,19 @@ def fetch_history(ak: object, stock_code: str, start: date, end: date):
     else:
         primary_error = RuntimeError("腾讯接口未返回行情")
     try:
+        rows = baostock.history(stock_code, start, end)
+        return rows, 'BaoStock'
+    except Exception as baostock_error:
+        fallback_error = baostock_error
+    try:
         frame = ak.stock_zh_a_hist(
             symbol=stock_code.zfill(6), period="daily", start_date=start.strftime("%Y%m%d"), end_date=end.strftime("%Y%m%d"), adjust="",
         )
         if not frame.empty:
             return frame, "AKShare/东方财富"
     except Exception as eastmoney_error:
-        raise RuntimeError(f"腾讯接口失败：{primary_error}；东方财富接口失败：{eastmoney_error}") from eastmoney_error
-    raise RuntimeError(f"腾讯接口失败：{primary_error}；东方财富接口未返回行情")
+        raise RuntimeError(f"腾讯接口失败：{primary_error}；BaoStock 失败：{fallback_error}；东方财富接口失败：{eastmoney_error}") from eastmoney_error
+    raise RuntimeError(f"腾讯接口失败：{primary_error}；BaoStock 失败：{fallback_error}；东方财富接口未返回行情")
 
 
 def fetch_tencent_snapshot(stock_code: str) -> dict[str, float | None]:
@@ -101,6 +108,24 @@ def fetch_tencent_snapshot(stock_code: str) -> dict[str, float | None]:
         "pb": nullable(fields[46]),
         "turnover_rate": nullable(fields[38]),
     }
+
+
+def fetch_snapshot(baostock: BaoStockClient, stock_code: str, end: date) -> dict[str, float | None]:
+    """腾讯实时估值失败时，以 BaoStock 最新收盘估值补齐可得字段。"""
+    try:
+        return fetch_tencent_snapshot(stock_code)
+    except Exception as tencent_error:
+        try:
+            rows = baostock.history(stock_code, end - timedelta(days=21), end)
+            latest = rows[-1]
+            return {
+                'market_cap': None,
+                'pe_ttm': nullable(latest.get('peTTM')),
+                'pb': nullable(latest.get('pbMRQ')),
+                'turnover_rate': nullable(latest.get('turn')),
+            }
+        except Exception as baostock_error:
+            raise RuntimeError(f'腾讯估值快照失败：{tencent_error}；BaoStock 估值回退失败：{baostock_error}') from baostock_error
 
 
 def main() -> None:
@@ -176,72 +201,74 @@ def main() -> None:
                 errors.append(f"全市场快照失败：{error}")
 
         requested_companies = 0
-        for company_index, (company_id, stock_code, latest_trade_date) in enumerate(companies):
-            try:
-                latest_date = latest_trade_date.date() if hasattr(latest_trade_date, "date") else latest_trade_date
-                fetch_start = initial_start if args.force or latest_date is None else max(initial_start, latest_date + timedelta(days=1))
-                if not args.metrics_only and fetch_start > args.end:
-                    print(f"{stock_code}: 已是最新，跳过日线请求")
-                    continue
-                # 单请求间隔 + 小幅随机抖动，避免固定节奏的集中访问触发风控。
-                if requested_companies:
-                    time.sleep(max(0.3, args.snapshot_interval) + random.uniform(0.15, 0.55))
-                requested_companies += 1
+        with BaoStockClient() as baostock:
+            for company_index, (company_id, stock_code, latest_trade_date) in enumerate(companies):
                 try:
-                    snapshot = fetch_tencent_snapshot(str(stock_code))
-                except Exception as snapshot_error:
+                    latest_date = latest_trade_date.date() if hasattr(latest_trade_date, "date") else latest_trade_date
+                    fetch_start = initial_start if args.force or latest_date is None else max(initial_start, latest_date + timedelta(days=1))
+                    if not args.metrics_only and fetch_start > args.end:
+                        print(f"{stock_code}: 已是最新，跳过日线请求")
+                        continue
+                    # 单请求间隔 + 小幅随机抖动，避免固定节奏的集中访问触发风控。
+                    if requested_companies:
+                        time.sleep(max(0.3, args.snapshot_interval) + random.uniform(0.15, 0.55))
+                    requested_companies += 1
+                    try:
+                        snapshot = fetch_snapshot(baostock, str(stock_code), args.end)
+                    except Exception as snapshot_error:
+                        if args.metrics_only:
+                            raise RuntimeError(f"腾讯估值快照失败：{snapshot_error}") from snapshot_error
+                        errors.append(f"{stock_code}：估值快照未更新：{snapshot_error}")
+                        snapshot = {"market_cap": None, "pe_ttm": None, "pb": None, "turnover_rate": None}
                     if args.metrics_only:
-                        raise RuntimeError(f"腾讯估值快照失败：{snapshot_error}") from snapshot_error
-                    errors.append(f"{stock_code}：估值快照未更新：{snapshot_error}")
-                    snapshot = {"market_cap": None, "pe_ttm": None, "pb": None, "turnover_rate": None}
-                if args.metrics_only:
+                        with connection.cursor() as cursor:
+                            cursor.execute(
+                                """UPDATE aero_daily_quote SET market_cap=%s, pe_ttm=%s, pb=%s,
+                                   turnover_rate=COALESCE(%s, turnover_rate), fetched_at=CURRENT_TIMESTAMP
+                                   WHERE company_id=%s AND trade_date=(SELECT latest_trade_date FROM
+                                     (SELECT MAX(trade_date) AS latest_trade_date FROM aero_daily_quote WHERE company_id=%s) AS latest)""",
+                                (snapshot["market_cap"], snapshot["pe_ttm"], snapshot["pb"], snapshot["turnover_rate"], company_id, company_id),
+                            )
+                        written += cursor.rowcount
+                        connection.commit()
+                        print(f"{stock_code}: 更新最新估值指标")
+                        continue
+                    frame, source_name = fetch_history(ak, baostock, str(stock_code), fetch_start, args.end)
+                    history_rows = [row for _, row in frame.iterrows()] if hasattr(frame, 'iterrows') else frame
+                    rows = []
+                    previous_close: float | None = None
+                    for index, row in enumerate(history_rows):
+                        trade_date = row.get("日期", row.get("date"))
+                        if hasattr(trade_date, "date"):
+                            trade_date = trade_date.date()
+                        latest = index == len(history_rows) - 1
+                        close = nullable(row.get("收盘", row.get("close")))
+                        change_pct = nullable(row.get("涨跌幅", row.get("pctChg")))
+                        if change_pct is None and close is not None and previous_close not in (None, 0):
+                            change_pct = (close - previous_close) / previous_close * 100
+                        rows.append((
+                            company_id, trade_date, nullable(row.get("开盘", row.get("open"))), nullable(row.get("最高", row.get("high"))), nullable(row.get("最低", row.get("low"))),
+                            close, change_pct, nullable(row.get("成交量", row.get("volume"))), nullable(row.get("成交额", row.get("amount"))),
+                            snapshot["turnover_rate"] if latest else nullable(row.get("换手率", row.get("turn"))), market_caps.get(str(stock_code).zfill(6), snapshot["market_cap"]) if latest else None, snapshot["pe_ttm"] if latest else None, snapshot["pb"] if latest else None, source_name,
+                        ))
+                        previous_close = close
                     with connection.cursor() as cursor:
-                        cursor.execute(
-                            """UPDATE aero_daily_quote SET market_cap=%s, pe_ttm=%s, pb=%s,
-                               turnover_rate=COALESCE(%s, turnover_rate), fetched_at=CURRENT_TIMESTAMP
-                               WHERE company_id=%s AND trade_date=(SELECT latest_trade_date FROM
-                                 (SELECT MAX(trade_date) AS latest_trade_date FROM aero_daily_quote WHERE company_id=%s) AS latest)""",
-                            (snapshot["market_cap"], snapshot["pe_ttm"], snapshot["pb"], snapshot["turnover_rate"], company_id, company_id),
+                        cursor.executemany(
+                            """INSERT INTO aero_daily_quote
+                               (company_id, trade_date, open_price, high_price, low_price, close_price, change_pct, volume, turnover, turnover_rate, market_cap, pe_ttm, pb, source_name)
+                               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                               ON DUPLICATE KEY UPDATE open_price=VALUES(open_price), high_price=VALUES(high_price), low_price=VALUES(low_price),
+                                 close_price=VALUES(close_price), change_pct=VALUES(change_pct), volume=VALUES(volume), turnover=VALUES(turnover),
+                                 turnover_rate=VALUES(turnover_rate), market_cap=COALESCE(VALUES(market_cap), market_cap), pe_ttm=COALESCE(VALUES(pe_ttm), pe_ttm), pb=COALESCE(VALUES(pb), pb),
+                                 source_name=VALUES(source_name), fetched_at=CURRENT_TIMESTAMP""",
+                            rows,
                         )
-                    written += cursor.rowcount
+                    written += len(rows)
                     connection.commit()
-                    print(f"{stock_code}: 更新最新估值指标")
-                    continue
-                frame, source_name = fetch_history(ak, str(stock_code), fetch_start, args.end)
-                rows = []
-                previous_close: float | None = None
-                for index, row in frame.iterrows():
-                    trade_date = row.get("日期", row.get("date"))
-                    if hasattr(trade_date, "date"):
-                        trade_date = trade_date.date()
-                    latest = index == len(frame) - 1
-                    close = nullable(row.get("收盘", row.get("close")))
-                    change_pct = nullable(row.get("涨跌幅"))
-                    if change_pct is None and close is not None and previous_close not in (None, 0):
-                        change_pct = (close - previous_close) / previous_close * 100
-                    rows.append((
-                        company_id, trade_date, nullable(row.get("开盘", row.get("open"))), nullable(row.get("最高", row.get("high"))), nullable(row.get("最低", row.get("low"))),
-                        close, change_pct, nullable(row.get("成交量", row.get("amount"))), nullable(row.get("成交额")),
-                        snapshot["turnover_rate"] if latest else nullable(row.get("换手率")), market_caps.get(str(stock_code).zfill(6), snapshot["market_cap"]) if latest else None, snapshot["pe_ttm"] if latest else None, snapshot["pb"] if latest else None, source_name,
-                    ))
-                    previous_close = close
-                with connection.cursor() as cursor:
-                    cursor.executemany(
-                        """INSERT INTO aero_daily_quote
-                           (company_id, trade_date, open_price, high_price, low_price, close_price, change_pct, volume, turnover, turnover_rate, market_cap, pe_ttm, pb, source_name)
-                           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                           ON DUPLICATE KEY UPDATE open_price=VALUES(open_price), high_price=VALUES(high_price), low_price=VALUES(low_price),
-                             close_price=VALUES(close_price), change_pct=VALUES(change_pct), volume=VALUES(volume), turnover=VALUES(turnover),
-                             turnover_rate=VALUES(turnover_rate), market_cap=COALESCE(VALUES(market_cap), market_cap), pe_ttm=COALESCE(VALUES(pe_ttm), pe_ttm), pb=COALESCE(VALUES(pb), pb),
-                             source_name=VALUES(source_name), fetched_at=CURRENT_TIMESTAMP""",
-                        rows,
-                    )
-                written += len(rows)
-                connection.commit()
-                print(f"{stock_code}: 写入 {len(rows)} 条")
-            except Exception as error:
-                connection.rollback()
-                errors.append(f"{stock_code}：{error}")
+                    print(f"{stock_code}: 写入 {len(rows)} 条")
+                except Exception as error:
+                    connection.rollback()
+                    errors.append(f"{stock_code}：{error}")
 
         status = "success" if not errors else "partial"
         with connection.cursor() as cursor:

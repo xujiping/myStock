@@ -13,6 +13,8 @@ from datetime import date, datetime
 from pathlib import Path
 from urllib.request import ProxyHandler, Request, build_opener
 
+from baostock_client import BaoStockClient
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -43,8 +45,12 @@ def fetch_industry_from_page(opener, stock_code: str) -> str:
     return match.group(1).strip()
 
 
-def fetch_industry(ak, opener, stock_code: str) -> tuple[str, str]:
-    """优先走 AKShare 个股信息接口，公开页面仅作为网络兼容性回退。"""
+def fetch_industry(ak, baostock: BaoStockClient, opener, stock_code: str) -> tuple[str, str]:
+    """BaoStock 为稳定主源，东方财富信息为分类补充和最后回退。"""
+    try:
+        return baostock.industry(stock_code), 'BaoStock/证监会行业分类'
+    except Exception:
+        pass
     try:
         frame = ak.stock_individual_info_em(symbol=stock_code.zfill(6), timeout=20)
         matches = frame.loc[frame['item'] == '行业', 'value']
@@ -59,7 +65,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description='补齐公司池行业标签（东方财富公开个股页）')
     parser.add_argument('--symbols', help='可选，逗号分隔的股票代码；用于定向补数')
     parser.add_argument('--force', action='store_true', help='重新读取已存在行业标签的公司')
-    parser.add_argument('--interval', type=float, default=1.5, help='站点请求最小间隔（秒），默认 1.5')
+    parser.add_argument('--interval', type=float, default=0.3, help='公司间请求最小间隔（秒），默认 0.3')
     args = parser.parse_args([item for item in sys.argv[1:] if item != '--'])
     load_env()
     if os.environ.get('DB_ENABLED', 'false').lower() != 'true':
@@ -112,29 +118,30 @@ def main() -> None:
             connection.commit()
             print('行业标签已是最新，无需请求。')
             return
-        for index, (company_id, stock_code, company_name) in enumerate(companies):
-            if index:
-                # 东方财富默认策略：1.5~3 秒，随机抖动避免固定节奏。
-                time.sleep(max(1.5, args.interval) + random.uniform(0.0, 1.5))
-            try:
-                industry, source_name = fetch_industry(ak, opener, str(stock_code))
-                with connection.cursor() as cursor:
-                    cursor.execute(
-                        '''INSERT INTO aero_company_tag (company_id, tag_type, tag_name, source_name)
-                           SELECT %s, '行业', %s, %s
-                           WHERE NOT EXISTS (
-                             SELECT 1 FROM aero_company_tag WHERE company_id=%s AND tag_type='行业'
-                               AND tag_name=%s AND (effective_to IS NULL OR effective_to >= CURDATE())
-                           )''',
-                        (company_id, industry, source_name, company_id, industry),
-                    )
-                    written += cursor.rowcount
-                connection.commit()
-                print(f'{stock_code} {company_name}: {industry}')
-            except Exception as error:
-                connection.rollback()
-                errors.append(f'{stock_code} {company_name}：{error}')
-                print(f'{stock_code} {company_name}: 失败 - {error}', file=sys.stderr)
+        with BaoStockClient() as baostock:
+            for index, (company_id, stock_code, company_name) in enumerate(companies):
+                if index:
+                    # 统一控制批处理节奏；东方财富回退时也不会形成密集请求。
+                    time.sleep(max(0.3, args.interval) + random.uniform(0.0, 0.5))
+                try:
+                    industry, source_name = fetch_industry(ak, baostock, opener, str(stock_code))
+                    with connection.cursor() as cursor:
+                        cursor.execute(
+                            '''INSERT INTO aero_company_tag (company_id, tag_type, tag_name, source_name)
+                               SELECT %s, '行业', %s, %s
+                               WHERE NOT EXISTS (
+                                 SELECT 1 FROM aero_company_tag WHERE company_id=%s AND tag_type='行业'
+                                   AND tag_name=%s AND (effective_to IS NULL OR effective_to >= CURDATE())
+                               )''',
+                            (company_id, industry, source_name, company_id, industry),
+                        )
+                        written += cursor.rowcount
+                    connection.commit()
+                    print(f'{stock_code} {company_name}: {industry}')
+                except Exception as error:
+                    connection.rollback()
+                    errors.append(f'{stock_code} {company_name}：{error}')
+                    print(f'{stock_code} {company_name}: 失败 - {error}', file=sys.stderr)
 
         with connection.cursor() as cursor:
             cursor.execute(

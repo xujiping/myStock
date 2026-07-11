@@ -50,7 +50,7 @@ type IngestionState = {
 
 type SyncTaskStatus = IngestionStatus
 type SyncTask = {
-  key: 'quotes' | 'announcements' | 'events' | 'industry' | 'concepts' | 'finance' | 'boards' | 'macro' | 'report'
+  key: 'quotes' | 'announcements' | 'events' | 'industry' | 'concepts' | 'finance' | 'boards' | 'macro' | 'report' | 'space_exposure'
   label: string
   description: string
   cadence: string
@@ -65,8 +65,33 @@ type SyncTask = {
   errorMessage?: string
   retryEnabled: boolean
   retryAttempt: number
+  sourceKey?: string
+  capabilityKey?: string
 }
-type SyncLog = { id: number; level: 'info' | 'warn' | 'error'; message: string; createdAt?: string }
+type DataSourceRun = {
+  id: number
+  capabilityKey: string
+  status: 'running' | 'success' | 'partial' | 'failed'
+  startedAt?: string
+  finishedAt?: string
+  artifactsFound: number
+  recordsProposed: number
+  recordsAdopted: number
+  warningCount: number
+  errorMessage?: string
+}
+type DataSource = {
+  key: string
+  name: string
+  type: 'api' | 'agent' | 'search' | 'internal'
+  accessMode: 'pull' | 'push' | 'hybrid'
+  trustLevel: 'high' | 'medium' | 'low'
+  status: 'active' | 'planned'
+  description?: string
+  capabilityCount: number
+  capabilities: string[]
+  lastRun?: DataSourceRun
+}
 type DailySyncState = {
   enabled: boolean
   time: string
@@ -81,11 +106,23 @@ type DailySyncState = {
   retryAt?: string
   errorMessage?: string
 }
+type HermesPrompt = { id: string, version: string, path: string, updatedAt?: string, content: string }
+type HermesEvidenceStatus = {
+  date: string
+  status: 'completed' | 'evidence_found' | 'partial' | 'waiting' | 'invalid'
+  message: string
+  candidate: { exists: boolean, location: 'inbox' | 'processed' | null, count: number | null, updatedAt?: string }
+  evidence: { exists: boolean, count: number, updatedAt?: string }
+  report: { exists: boolean, updatedAt?: string }
+  lastSuccessfulAt?: string
+}
 type ThemeMode = 'light' | 'dark'
-type CompanySortKey = 'company' | 'sector' | 'exposure' | 'price' | 'change' | 'marketCap' | 'signal'
+type CompanySortKey = 'company' | 'sector' | 'exposure' | 'price' | 'change' | 'marketCap'
 type SortDirection = 'asc' | 'desc'
 
 const THEME_STORAGE_KEY = 'aero-investment-theme'
+const PAGE_STORAGE_KEY = 'aero-investment-page'
+const VALID_PAGES: Page[] = ['overview', 'companies', 'events', 'reports', 'sync']
 
 type CompanyDetail = {
   company: { code: string; name: string; exchange?: string | null; level: string; description?: string | null; latestQuote: { tradeDate: string; open: string; high: string; low: string; close: string; change: number | null; volume: number | null; turnover: number | null; turnoverRate: number | null; marketCap: string; peTtm: string; pb: string; source?: string | null } | null }
@@ -100,7 +137,7 @@ const navItems: { id: Page; label: string; icon: typeof LayoutDashboard }[] = [
   { id: 'overview', label: '今日总览', icon: LayoutDashboard },
   { id: 'companies', label: '公司池', icon: Telescope },
   { id: 'events', label: '事件中心', icon: BellRing },
-  { id: 'sync', label: '数据同步', icon: ListChecks },
+  { id: 'sync', label: '数据源管理', icon: ListChecks },
   { id: 'reports', label: '日报归档', icon: FileText },
 ]
 
@@ -135,8 +172,6 @@ function companySortValue(company: Company, sortKey: CompanySortKey) {
       return company.change
     case 'marketCap':
       return parseSortableNumber(company.marketCap)
-    case 'signal':
-      return company.signal
   }
 }
 
@@ -163,7 +198,11 @@ function ChangeBadge({ change }: { change: number }) {
 }
 
 function App() {
-  const [activePage, setActivePage] = useState<Page>('overview')
+  const [activePage, setActivePage] = useState<Page>(() => {
+    const stored = window.localStorage.getItem(PAGE_STORAGE_KEY) as Page | null
+    return stored && VALID_PAGES.includes(stored) ? stored : 'overview'
+  })
+  useEffect(() => { window.localStorage.setItem(PAGE_STORAGE_KEY, activePage) }, [activePage])
   const [theme, setTheme] = useState<ThemeMode>(() => {
     const stored = window.localStorage.getItem(THEME_STORAGE_KEY)
     return stored === 'dark' ? 'dark' : 'light'
@@ -176,10 +215,13 @@ function App() {
   const [refreshedAt, setRefreshedAt] = useState('18:42')
   const [ingestion, setIngestion] = useState<IngestionState>({ status: 'idle', recordsWritten: 0, warningCount: 0 })
   const [syncTasks, setSyncTasks] = useState<SyncTask[]>([])
-  const [selectedSyncTask, setSelectedSyncTask] = useState<SyncTask['key']>('quotes')
-  const [syncLogs, setSyncLogs] = useState<SyncLog[]>([])
+  const [dataSources, setDataSources] = useState<DataSource[]>([])
   const [syncError, setSyncError] = useState('')
   const [dailySync, setDailySync] = useState<DailySyncState>({ enabled: true, time: '18:30', timeZone: 'Asia/Shanghai', tasks: ['quotes', 'boards'], status: 'idle', running: false })
+  const [hermesEvidence, setHermesEvidence] = useState<HermesEvidenceStatus>({ date: '', status: 'waiting', message: '正在读取 Hermes 取证状态。', candidate: { exists: false, location: null, count: null }, evidence: { exists: false, count: 0 }, report: { exists: false } })
+  const [hermesPrompt, setHermesPrompt] = useState<HermesPrompt | null>(null)
+  const [promptOpen, setPromptOpen] = useState(false)
+  const [promptFeedback, setPromptFeedback] = useState('')
   const todayLabel = new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short' })
     .format(new Date())
     .replace(/年|月/g, ' / ')
@@ -221,21 +263,32 @@ function App() {
       const payload = await response.json() as { items: SyncTask[] }
       setSyncTasks(payload.items)
       setSyncError('')
-      const selectedExists = payload.items.some((task) => task.key === selectedSyncTask)
-      if (!selectedExists && payload.items[0]) setSelectedSyncTask(payload.items[0].key)
     } catch (error) {
       setSyncError(error instanceof Error ? error.message : '同步中心暂不可用')
     }
   }
 
-  const loadSyncLogs = async (taskKey = selectedSyncTask) => {
+  const loadDataSources = async () => {
     try {
-      const response = await fetch(`/api/sync/tasks/${taskKey}/logs`)
-      if (!response.ok) throw new Error('任务日志暂不可用')
-      const payload = await response.json() as { items: SyncLog[] }
-      setSyncLogs(payload.items)
-    } catch {
-      setSyncLogs([])
+      const response = await fetch('/api/data-sources')
+      if (!response.ok) throw new Error('数据源目录暂不可用')
+      const payload = await response.json() as { items: DataSource[] }
+      setDataSources(payload.items)
+    } catch (error) {
+      setSyncError(error instanceof Error ? error.message : '数据源目录暂不可用')
+    }
+  }
+
+  const loadHermesPrompt = async () => {
+    try {
+      const response = await fetch('/api/data-sources/hermes/prompt')
+      if (!response.ok) throw new Error('Hermes 提示词暂不可用')
+      const payload = await response.json() as HermesPrompt
+      setHermesPrompt(payload)
+      return payload
+    } catch (error) {
+      setSyncError(error instanceof Error ? error.message : 'Hermes 提示词暂不可用')
+      return null
     }
   }
 
@@ -249,14 +302,22 @@ function App() {
     }
   }
 
+  const loadHermesEvidence = async () => {
+    try {
+      const response = await fetch('/api/sync/hermes-evidence')
+      if (!response.ok) throw new Error('Hermes 取证状态暂不可用')
+      setHermesEvidence(await response.json() as HermesEvidenceStatus)
+    } catch (error) {
+      setSyncError(error instanceof Error ? error.message : 'Hermes 取证状态暂不可用')
+    }
+  }
+
   const triggerSyncTask = async (taskKey: SyncTask['key']) => {
-    setSelectedSyncTask(taskKey)
     try {
       const response = await fetch(`/api/sync/tasks/${taskKey}/run`, { method: 'POST' })
       const payload = await response.json() as { error?: string }
       if (!response.ok) throw new Error(payload.error ?? '同步任务启动失败')
       await loadSyncTasks()
-      await loadSyncLogs(taskKey)
     } catch (error) {
       setSyncError(error instanceof Error ? error.message : '同步任务启动失败')
     }
@@ -270,6 +331,23 @@ function App() {
       await Promise.all([loadDailySync(), loadSyncTasks()])
     } catch (error) {
       setSyncError(error instanceof Error ? error.message : '盘后同步启动失败')
+    }
+  }
+
+  const openHermesPrompt = async () => {
+    setPromptFeedback('')
+    const prompt = hermesPrompt ?? await loadHermesPrompt()
+    if (prompt) setPromptOpen(true)
+  }
+
+  const copyHermesPrompt = async () => {
+    const prompt = hermesPrompt ?? await loadHermesPrompt()
+    if (!prompt) return
+    try {
+      await navigator.clipboard.writeText(prompt.content)
+      setPromptFeedback('已复制，可直接派发给 Hermes。')
+    } catch {
+      setPromptFeedback('复制失败，请在提示词面板中手动复制。')
     }
   }
 
@@ -293,12 +371,21 @@ function App() {
   useEffect(() => {
     if (activePage !== 'sync') return
     void loadSyncTasks()
-    void loadSyncLogs()
+    void loadDataSources()
     void loadDailySync()
-    const timer = window.setInterval(() => { void loadSyncTasks(); void loadSyncLogs(); void loadDailySync() }, 2500)
+    void loadHermesEvidence()
+    const timer = window.setInterval(() => { void loadSyncTasks(); void loadDataSources(); void loadDailySync(); void loadHermesEvidence() }, 5000)
     return () => window.clearInterval(timer)
-  }, [activePage, selectedSyncTask])
+  }, [activePage])
   const handleRefresh = () => { void loadOverview() }
+  useEffect(() => {
+    if (!promptOpen) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setPromptOpen(false)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [promptOpen])
 
   return (
     <div className="app-shell" data-theme={theme}>
@@ -326,7 +413,7 @@ function App() {
           {activePage === 'overview' && <Overview data={data} onNavigate={setActivePage} />}
           {activePage === 'companies' && <Companies companies={data.companies} totalCompanies={data.companies.length} query={query} setQuery={setQuery} />}
           {activePage === 'events' && <Events events={visibleEvents} totalEvents={data.events.length} level={eventLevel} setLevel={setEventLevel} />}
-          {activePage === 'sync' && <SyncCenter tasks={syncTasks} selectedTask={selectedSyncTask} setSelectedTask={setSelectedSyncTask} logs={syncLogs} dailySync={dailySync} error={syncError} onRun={triggerSyncTask} onRunDaily={triggerDailySync} onRefresh={() => { void loadSyncTasks(); void loadSyncLogs(); void loadDailySync() }} />}
+          {activePage === 'sync' && <SyncCenter tasks={syncTasks} dataSources={dataSources} dailySync={dailySync} hermesEvidence={hermesEvidence} hermesPrompt={hermesPrompt} promptOpen={promptOpen} promptFeedback={promptFeedback} error={syncError} onRun={triggerSyncTask} onRunDaily={triggerDailySync} onImportHermes={() => triggerSyncTask('space_exposure')} onShowPrompt={() => { void openHermesPrompt() }} onCopyPrompt={() => { void copyHermesPrompt() }} onClosePrompt={() => setPromptOpen(false)} onRefresh={() => { void loadSyncTasks(); void loadDataSources(); void loadDailySync(); void loadHermesEvidence() }} />}
           {activePage === 'reports' && <Reports />}
         </div>
         <footer className="main-footer"><span><ShieldAlert size={13} /> 研究信息工具，不构成投资建议</span><span>行情数据：盘后批次 · 任务状态：正常</span></footer>
@@ -393,7 +480,7 @@ function Companies({ companies, totalCompanies, query, setQuery }: { companies: 
   const spaceSectors = useMemo(() => ['全部', ...Array.from(new Set(companies.flatMap((company) => company.spaceProfile?.businesses.map((business) => business.primarySector) ?? []))).sort()], [companies])
   const businessRoles = useMemo(() => ['全部', ...Array.from(new Set(companies.flatMap((company) => company.spaceProfile?.businesses.map((business) => business.role) ?? [])))], [companies])
   const selectedCompany = useMemo(() => selectedCode ? companies.find((company) => company.code === selectedCode) ?? null : null, [companies, selectedCode])
-  const sortDefaults: Record<CompanySortKey, SortDirection> = { company: 'asc', sector: 'asc', exposure: 'desc', price: 'desc', change: 'desc', marketCap: 'desc', signal: 'asc' }
+  const sortDefaults: Record<CompanySortKey, SortDirection> = { company: 'asc', sector: 'asc', exposure: 'desc', price: 'desc', change: 'desc', marketCap: 'desc' }
   const filteredCompanies = useMemo(() => {
     const keyword = query.trim().toLowerCase()
     return companies.filter((company) => {
@@ -458,7 +545,7 @@ function Companies({ companies, totalCompanies, query, setQuery }: { companies: 
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [selectedCode])
 
-  return <><section className="page-title-row"><div><div className="eyebrow"><span className="eyebrow-line" />公司池 / {totalCompanies} 家</div><h1>航天相关公司</h1><p className="page-sub">按产业链位置、业务角色和商业航天暴露度筛选；点击公司后在右侧抽屉查看可追溯画像。</p></div><button className={`primary-button ${filtersOpen ? 'active-filter-button' : ''}`} onClick={() => setFiltersOpen((open) => !open)}><ListFilter size={15} /> 管理筛选{activeFilterCount > 0 && <em>{activeFilterCount}</em>}</button></section>{filtersOpen && <section className="filter-panel"><div className="filter-panel-top"><div><span>FILTERS / 即时生效</span><strong>公司画像筛选</strong></div><button className="text-button" onClick={clearFilters}>清空条件</button></div><div className="filter-groups"><FilterGroup label="关联等级" value={level} options={levels} onChange={setLevel} /><FilterGroup label="行业标签" value={industry} options={industries} onChange={setIndustry} /><FilterGroup label="最新涨跌" value={performance} options={['全部', '上涨', '下跌']} onChange={(value) => setPerformance(value as typeof performance)} /><FilterGroup label="一级板块" value={spaceSector} options={spaceSectors} onChange={setSpaceSector} /><FilterGroup label="业务角色" value={businessRole} options={businessRoles} onChange={setBusinessRole} /></div></section>}<div className="toolbar"><div className="search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索名称、代码、行业、板块或角色" /></div><div className="toolbar-meta"><span><span className="status-dot" /> 显示 {filteredCompanies.length} / {totalCompanies} 家</span><div className="level-menu"><button className="ghost-button" onClick={() => setLevelMenuOpen((open) => !open)}><Filter size={15} /> {level === '全部' ? '关联等级' : level} <ChevronDown size={14} /></button>{levelMenuOpen && <div className="level-menu-popover">{levels.map((item) => <button key={item} className={level === item ? 'selected' : ''} onClick={() => { setLevel(item); setLevelMenuOpen(false) }}>{item}</button>)}</div>}</div></div></div><section className="panel full-panel"><div className="table-head full-company-head"><SortHeader label="公司" sortKey="company" activeSortKey={sortKey} direction={sortDirection} onSort={toggleSort} /><SortHeader label="产业链位置 / 角色" sortKey="sector" activeSortKey={sortKey} direction={sortDirection} onSort={toggleSort} /><SortHeader label="商业航天暴露" sortKey="exposure" activeSortKey={sortKey} direction={sortDirection} onSort={toggleSort} /><SortHeader label="收盘" sortKey="price" activeSortKey={sortKey} direction={sortDirection} onSort={toggleSort} /><SortHeader label="涨跌" sortKey="change" activeSortKey={sortKey} direction={sortDirection} onSort={toggleSort} /><SortHeader label="市值" sortKey="marketCap" activeSortKey={sortKey} direction={sortDirection} onSort={toggleSort} /><SortHeader label="状态" sortKey="signal" activeSortKey={sortKey} direction={sortDirection} onSort={toggleSort} /></div>{sortedCompanies.length ? sortedCompanies.map((company) => <button key={company.code} className={`table-row full-company-row company-row-button ${selectedCode === company.code ? 'selected' : ''}`} onClick={() => void openDetail(company.code)}><div className="company-cell"><span className="stock-code">{company.code}</span><strong>{company.name}</strong><small>{company.level}</small></div><div className="tag-cell"><span>{company.spaceProfile?.businesses[0]?.secondarySector ?? '待确认'}</span><small>{company.spaceProfile?.businesses[0]?.role ?? '待确认'}</small></div><div className="profile-exposure"><strong>{company.spaceProfile?.commercialRevenueShare ?? '待确认'}</strong><small>{company.spaceProfile?.commercialRevenueConfidence ? `${company.spaceProfile.commercialRevenueConfidence}置信度` : '暂无画像'}</small></div><strong>{company.price}</strong><ToneValue value={formatChange(company.change)} tone={company.change >= 0 ? 'positive' : 'negative'} /><span className="market-cap">{company.marketCap}</span><span className={`signal signal-${company.signalTone}`}>{company.signal}</span><ChevronRight className="detail-chevron" size={15} /></button>) : <div className="company-empty"><Search size={18} /><strong>没有匹配的公司</strong><span>尝试调整筛选条件或清空搜索内容。</span><button className="ghost-button" onClick={clearFilters}>清空筛选</button></div>}</section>{selectedCode && <><button className="detail-drawer-backdrop" aria-label="关闭公司详情" onClick={closeDetail} /><aside className="detail-drawer" role="dialog" aria-modal="true" aria-label="公司详情抽屉"><div className="detail-drawer-head"><div><span>COMPANY DETAIL / 公司详情</span><strong>{detail?.company.name ?? selectedCompany?.name ?? '读取中'}</strong><small>{detail?.company.code ?? selectedCompany?.code ?? '--'} · {detail?.company.exchange ?? '研究档案'}</small></div><button className="detail-drawer-close" onClick={closeDetail} aria-label="关闭详情"><X size={16} /></button></div><div className="detail-drawer-body"><CompanyDetailPanel detail={detail} loading={loadingCode === selectedCode} error={detailError} /></div></aside></>}</>
+  return <><section className="page-title-row"><div><div className="eyebrow"><span className="eyebrow-line" />公司池 / {totalCompanies} 家</div><h1>航天相关公司</h1><p className="page-sub">按产业链位置、业务角色和商业航天暴露度筛选；点击公司后在右侧抽屉查看可追溯画像。</p></div><button className={`primary-button ${filtersOpen ? 'active-filter-button' : ''}`} onClick={() => setFiltersOpen((open) => !open)}><ListFilter size={15} /> 管理筛选{activeFilterCount > 0 && <em>{activeFilterCount}</em>}</button></section>{filtersOpen && <section className="filter-panel"><div className="filter-panel-top"><div><span>FILTERS / 即时生效</span><strong>公司画像筛选</strong></div><button className="text-button" onClick={clearFilters}>清空条件</button></div><div className="filter-groups"><FilterGroup label="关联等级" value={level} options={levels} onChange={setLevel} /><FilterGroup label="行业标签" value={industry} options={industries} onChange={setIndustry} /><FilterGroup label="最新涨跌" value={performance} options={['全部', '上涨', '下跌']} onChange={(value) => setPerformance(value as typeof performance)} /><FilterGroup label="一级板块" value={spaceSector} options={spaceSectors} onChange={setSpaceSector} /><FilterGroup label="业务角色" value={businessRole} options={businessRoles} onChange={setBusinessRole} /></div></section>}<div className="toolbar"><div className="search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索名称、代码、行业、板块或角色" /></div><div className="toolbar-meta"><span><span className="status-dot" /> 显示 {filteredCompanies.length} / {totalCompanies} 家</span><div className="level-menu"><button className="ghost-button" onClick={() => setLevelMenuOpen((open) => !open)}><Filter size={15} /> {level === '全部' ? '关联等级' : level} <ChevronDown size={14} /></button>{levelMenuOpen && <div className="level-menu-popover">{levels.map((item) => <button key={item} className={level === item ? 'selected' : ''} onClick={() => { setLevel(item); setLevelMenuOpen(false) }}>{item}</button>)}</div>}</div></div></div><section className="panel full-panel"><div className="table-head full-company-head"><SortHeader label="公司" sortKey="company" activeSortKey={sortKey} direction={sortDirection} onSort={toggleSort} /><SortHeader label="产业链位置 / 角色" sortKey="sector" activeSortKey={sortKey} direction={sortDirection} onSort={toggleSort} /><SortHeader label="商业航天暴露" sortKey="exposure" activeSortKey={sortKey} direction={sortDirection} onSort={toggleSort} /><SortHeader label="收盘" sortKey="price" activeSortKey={sortKey} direction={sortDirection} onSort={toggleSort} /><SortHeader label="涨跌" sortKey="change" activeSortKey={sortKey} direction={sortDirection} onSort={toggleSort} /><SortHeader label="市值" sortKey="marketCap" activeSortKey={sortKey} direction={sortDirection} onSort={toggleSort} /></div>{sortedCompanies.length ? sortedCompanies.map((company) => <button key={company.code} className={`table-row full-company-row company-row-button ${selectedCode === company.code ? 'selected' : ''}`} onClick={() => void openDetail(company.code)}><div className="company-cell"><span className="stock-code">{company.code}</span><strong>{company.name}</strong><small>{company.level}</small></div><div className="tag-cell"><span>{company.spaceProfile?.businesses[0]?.secondarySector ?? '待确认'}</span><small>{company.spaceProfile?.businesses[0]?.role ?? '待确认'}</small></div><div className="profile-exposure"><strong>{company.spaceProfile?.commercialRevenueShare ?? '待确认'}</strong><small>{company.spaceProfile?.commercialRevenueConfidence ? `${company.spaceProfile.commercialRevenueConfidence}置信度` : '暂无画像'}</small></div><strong>{company.price}</strong><ToneValue value={formatChange(company.change)} tone={company.change >= 0 ? 'positive' : 'negative'} /><span className="market-cap">{company.marketCap}</span><ChevronRight className="detail-chevron" size={15} /></button>) : <div className="company-empty"><Search size={18} /><strong>没有匹配的公司</strong><span>尝试调整筛选条件或清空搜索内容。</span><button className="ghost-button" onClick={clearFilters}>清空筛选</button></div>}</section>{selectedCode && <><button className="detail-drawer-backdrop" aria-label="关闭公司详情" onClick={closeDetail} /><aside className="detail-drawer" role="dialog" aria-modal="true" aria-label="公司详情抽屉"><div className="detail-drawer-head"><div><span>COMPANY DETAIL / 公司详情</span><strong>{detail?.company.name ?? selectedCompany?.name ?? '读取中'}</strong><small>{detail?.company.code ?? selectedCompany?.code ?? '--'} · {detail?.company.exchange ?? '研究档案'}</small></div><button className="detail-drawer-close" onClick={closeDetail} aria-label="关闭详情"><X size={16} /></button></div><div className="detail-drawer-body"><CompanyDetailPanel detail={detail} loading={loadingCode === selectedCode} error={detailError} /></div></aside></>}</>
 }
 
 function FilterGroup({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (value: string) => void }) { return <div className="filter-group"><span>{label}</span><div>{options.map((item) => <button key={item} className={value === item ? 'selected' : ''} onClick={() => onChange(item)}>{item}</button>)}</div></div> }
@@ -572,55 +659,37 @@ function syncTime(value?: string) {
   return new Date(value).toLocaleString('zh-CN', { hour12: false }).replaceAll('/', '-')
 }
 
-function SyncCenter({ tasks, selectedTask, setSelectedTask, logs, dailySync, error, onRun, onRunDaily, onRefresh }: { tasks: SyncTask[]; selectedTask: SyncTask['key']; setSelectedTask: (key: SyncTask['key']) => void; logs: SyncLog[]; dailySync: DailySyncState; error: string; onRun: (key: SyncTask['key']) => void; onRunDaily: () => void; onRefresh: () => void }) {
-  const selected = tasks.find((task) => task.key === selectedTask)
-  const anyTaskRunning = tasks.some((task) => task.running)
-  const anyRunning = anyTaskRunning || dailySync.running
-  const completed = tasks.filter((task) => task.status === 'success').length
-  const failedTasks = tasks.filter((task) => task.status === 'failed' || task.status === 'partial').length
-  const currentDailyTask = tasks.find((task) => task.key === dailySync.currentTask)?.label
-  return <>
-    <section className="page-title-row sync-title-row"><div><div className="eyebrow"><span className="eyebrow-line" />SYNC CONTROL / 数据同步中心</div><h1>同步状态与<br /><span>执行证据</span></h1><p className="page-sub">每次页面触发都会记录任务、进度和原始日志。为降低上游风控，同一时刻只执行一个外部同步任务。</p></div><button className="ghost-button" onClick={onRefresh}><RefreshCw size={15} /> 刷新状态</button></section>
-    {error && <div className="data-warning"><AlertTriangle size={15} /> {error}</div>}
-    <section className={`daily-sync-card daily-sync-${dailySync.status}`}>
-      <div className="daily-sync-orbit" />
-      <div className="daily-sync-copy"><span>DAILY CLOSE / 每日盘后流程</span><h2>{dailySync.running ? '正在更新今日数据' : dailySync.enabled ? `每日 ${dailySync.time} 自动更新` : '自动盘后同步已关闭'}</h2><p>{dailySync.running ? `${currentDailyTask ?? '正在准备任务'}${dailySync.retryAt ? `，将于 ${syncTime(dailySync.retryAt)} 重试` : '，完成行情后将自动聚合板块。'}` : `顺序：行情与估值 → 板块聚合。行业、概念和财务保留低频维护，不占用每日更新。`}</p></div>
-      <div className="daily-sync-status"><span className={`sync-status-dot status-${dailySync.status}`} /><div><small>{dailySync.running ? '当前状态' : '最近批次'}</small><strong>{dailySync.running ? '执行中' : syncStatusLabel(dailySync.status)}</strong><em>{dailySync.finishedAt ? syncTime(dailySync.finishedAt) : `时区 ${dailySync.timeZone}`}</em></div></div>
-      <button className="primary-button daily-sync-button" disabled={anyRunning} onClick={onRunDaily}><Play size={15} className={dailySync.running ? 'spin' : ''} />{dailySync.running ? '盘后同步中' : '立即执行盘后同步'}</button>
-      {dailySync.errorMessage && <div className="daily-sync-error"><AlertTriangle size={13} /> {dailySync.errorMessage}</div>}
-    </section>
-    <section className="sync-summary">
-      <div><span>任务覆盖</span><strong>{tasks.length || '--'} <small>项</small></strong><p>行情、归属、财务与板块计算</p></div>
-      <div><span>当前执行</span><strong className={anyRunning ? 'sync-live-number' : ''}>{tasks.filter((task) => task.running).length}</strong><p>{dailySync.running ? `盘后流程：${currentDailyTask ?? '准备中'}` : anyRunning ? '正在输出实时日志' : '当前没有运行任务'}</p></div>
-      <div><span>最近成功</span><strong>{completed}</strong><p>以最近一次页面任务为准</p></div>
-      <div><span>需要关注</span><strong>{failedTasks}</strong><p>{dailySync.retryAt ? `盘后流程将于 ${syncTime(dailySync.retryAt)} 重试` : '失败或部分完成的任务可手动重跑'}</p></div>
-    </section>
-    <section className="sync-layout">
-      <div className="sync-task-list">
-        <div className="sync-section-title"><span>PIPELINE / 任务队列</span><small>{anyRunning ? '运行中将自动刷新' : '点击任务即可开始'}</small></div>
-        {tasks.map((task) => {
-          const isSelected = task.key === selectedTask
-          const isBlocked = anyRunning && !task.running
-          return <article key={task.key} className={`sync-task-card ${isSelected ? 'selected' : ''} sync-task-${task.status}`} onClick={() => setSelectedTask(task.key)}>
-            <div className="sync-task-top"><span className={`sync-status-dot status-${task.status}`} /> <div><strong>{task.label}</strong><small>{task.cadence}</small></div><span className="sync-state-label">{syncStatusLabel(task.status)}</span></div>
-            <p>{task.description}</p>
-            <div className="sync-task-meta"><span><Database size={12} /> 写入 {task.recordsWritten.toLocaleString('zh-CN')} 条</span><span>{task.warningCount ? `${task.warningCount} 条告警` : '无告警'}</span></div>
-            <div className="sync-task-footer"><span>{task.running ? '正在执行，请查看右侧日志' : `最近：${syncTime(task.finishedAt)}`}</span><button className={task.running ? 'ghost-button' : 'sync-run-button'} disabled={task.running || isBlocked} onClick={(event) => { event.stopPropagation(); onRun(task.key) }}><Play size={12} />{task.running ? '执行中' : '运行'}</button></div>
-            {task.errorMessage && <div className="sync-task-error"><AlertTriangle size={12} /> {task.errorMessage}</div>}
-            {task.retryAt && <div className="sync-task-retry"><Clock3 size={12} /> 将于 {syncTime(task.retryAt)} 自动重试</div>}
-          </article>
-        })}
-      </div>
-      <section className="sync-console panel">
-        <div className="sync-console-head"><div><span>LIVE LOG / {selected?.label ?? '请选择任务'}</span><strong>{selected?.running ? '实时输出中' : '最近一次运行日志'}</strong></div><div className={selected?.running ? 'console-live' : 'console-idle'}><i /> {selected?.running ? 'LIVE' : 'ARCHIVE'}</div></div>
-        <div className="sync-console-context"><span>状态：<b className={`console-status-${selected?.status ?? 'idle'}`}>{selected ? syncStatusLabel(selected.status) : '--'}</b></span><span>开始：{syncTime(selected?.startedAt)}</span><span>{selected?.retryAt ? `下次重试：${syncTime(selected.retryAt)}` : `策略：${selected?.retryEnabled ? '失败后 15 分钟自动重试' : '仅手动或低频执行'}`}</span></div>
-        <div className="sync-log-stream" aria-live="polite">{logs.length ? logs.map((log) => <div key={log.id} className={`sync-log-line log-${log.level}`}><time>{log.createdAt ? new Date(log.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) : '--:--:--'}</time><span>{log.level === 'error' ? 'ERR' : log.level === 'warn' ? 'WRN' : 'INF'}</span><p>{log.message}</p></div>) : <div className="sync-log-empty"><TerminalSquareIcon />暂无日志。选择任务并点击“运行”后，这里会实时显示公司、数据类型、写入结果与失败原因。</div>}</div>
-      </section>
-    </section>
-  </>
+function hermesStatusLabel(status: HermesEvidenceStatus['status']) {
+  return ({ completed: '今日已完成', evidence_found: '发现证据', partial: '产物待齐', waiting: '等待取证', invalid: '文件异常' })[status]
 }
 
-function TerminalSquareIcon() { return <Database size={20} /> }
+function SyncCenter({ tasks, dataSources, dailySync, hermesEvidence, hermesPrompt, promptOpen, promptFeedback, error, onRun, onRunDaily, onImportHermes, onShowPrompt, onCopyPrompt, onClosePrompt, onRefresh }: { tasks: SyncTask[]; dataSources: DataSource[]; dailySync: DailySyncState; hermesEvidence: HermesEvidenceStatus; hermesPrompt: HermesPrompt | null; promptOpen: boolean; promptFeedback: string; error: string; onRun: (key: SyncTask['key']) => void; onRunDaily: () => void; onImportHermes: () => void; onShowPrompt: () => void; onCopyPrompt: () => void; onClosePrompt: () => void; onRefresh: () => void }) {
+  const anyRunning = dailySync.running || tasks.some((task) => task.running)
+  const currentDailyTask = tasks.find((task) => task.key === dailySync.currentTask)?.label
+  const sourceName = (key?: string) => dataSources.find((source) => source.key === key)?.name ?? key ?? '待关联'
+  return <>
+    <section className="page-title-row source-page-title"><div><div className="eyebrow"><span className="eyebrow-line" />DATA CONTROL / 数据源管理</div><h1>数据源管理</h1><p className="page-sub">统一管理 API、智能体、搜索和本地处理渠道。自动任务持续运行，只有异常或补数时才需要手动操作。</p></div><button className="ghost-button" onClick={onRefresh}><RefreshCw size={15} /> 刷新</button></section>
+    {error && <div className="data-warning"><AlertTriangle size={15} /> {error}</div>}
+    <section className="source-registry" aria-label="数据源目录">
+      <div className="source-registry-head"><div><span>REGISTERED SOURCES / 已注册来源</span><h2>来源、能力与最近运行</h2></div><small>{dataSources.length ? `${dataSources.filter((source) => source.status === 'active').length} 个已启用` : '等待目录初始化'}</small></div>
+      {dataSources.length ? <div className="source-registry-grid">{dataSources.map((source) => {
+        const run = source.lastRun
+        return <article className={`source-registry-card source-${source.status}`} key={source.key}>
+          <div className="source-registry-card-head"><div><span className="source-type">{source.type} · {source.accessMode}</span><strong>{source.name}</strong></div><em className={`source-status status-${run?.status ?? (source.status === 'active' ? 'idle' : 'partial')}`}>{source.status === 'active' ? run ? syncStatusLabel(run.status) : '待运行' : '预留'}</em></div>
+          <p>{source.description ?? '未填写来源说明。'}</p>
+          <div className="source-capability-list">{source.capabilities.map((capability) => <span key={capability}>{capability}</span>)}</div>
+          <footer><span>{run?.finishedAt ? `最近：${syncTime(run.finishedAt)}` : '尚无运行记录'}</span><b>{run ? `${run.recordsAdopted} 条写入` : `${source.capabilityCount} 项能力`}</b></footer>
+        </article>
+      })}</div> : <div className="source-registry-empty"><Database size={16} /> 数据源目录尚未初始化。执行 <code>pnpm seed:data-sources</code> 后即可在此管理来源。</div>}
+    </section>
+    <section className="source-automation">
+      <article className={`automation-row automation-${dailySync.status}`}><span className={`sync-status-dot status-${dailySync.status}`} /><div><small>每日盘后自动化</small><strong>{dailySync.running ? `${currentDailyTask ?? '任务'}执行中` : dailySync.enabled ? `每日 ${dailySync.time} 自动运行` : '自动运行已关闭'}</strong><p>{dailySync.finishedAt ? `最近完成：${syncTime(dailySync.finishedAt)}` : `时区：${dailySync.timeZone}`}</p></div><button className="sync-run-button" disabled={anyRunning} onClick={onRunDaily}><Play size={12} />{dailySync.running ? '执行中' : '立即运行'}</button></article>
+      <article className={`automation-row automation-hermes hermes-${hermesEvidence.status}`}><Telescope size={17} /><div><small>Hermes 研究智能体 · 商业航天取证</small><strong>{hermesStatusLabel(hermesEvidence.status)} <em>证据 {hermesEvidence.evidence.count} · 候选 {hermesEvidence.candidate.count ?? '—'}</em></strong><p>{hermesEvidence.lastSuccessfulAt ? `最近完成：${syncTime(hermesEvidence.lastSuccessfulAt)}` : hermesEvidence.message}</p></div><div className="automation-actions"><button className="ghost-button" onClick={onShowPrompt}><BookOpen size={13} /> 派发提示词</button><button className="sync-run-button" disabled={!hermesEvidence.candidate.exists || hermesEvidence.candidate.location !== 'inbox' || anyRunning} onClick={onImportHermes}><Play size={12} />{hermesEvidence.candidate.location === 'processed' ? '已归档' : '校验并导入'}</button></div></article>
+    </section>
+    {promptOpen && hermesPrompt && <><button className="hermes-prompt-backdrop" aria-label="关闭派发提示词" onClick={onClosePrompt} /><section className="hermes-prompt-panel" role="dialog" aria-modal="true" aria-label="Hermes 派发提示词"><header><div><span>AGENT PROMPT / {hermesPrompt.id}</span><h2>Hermes 每日取证任务 · {hermesPrompt.version}</h2><small>版本文件：{hermesPrompt.path} · 更新于 {syncTime(hermesPrompt.updatedAt)}</small></div><button className="detail-drawer-close" onClick={onClosePrompt} aria-label="关闭"><X size={16} /></button></header><pre>{hermesPrompt.content}</pre><footer><span>{promptFeedback || '提示词已随项目版本管理；更换环境后可直接在这里复制。'}</span><button className="primary-button" onClick={onCopyPrompt}><BookOpen size={14} /> 复制提示词</button></footer></section></>}
+    <section className="source-task-list" aria-label="手动维护任务"><div className="source-task-list-head"><div><span>MANUAL FALLBACK / 人工兜底</span><h2>需要时再手动运行</h2></div><small>同一时间仅运行一个外部任务</small></div>{tasks.map((task) => <article className={`source-task-row task-${task.status}`} key={task.key}><span className={`sync-status-dot status-${task.status}`} /><div><strong>{task.label}</strong><small>{sourceName(task.sourceKey)} · {task.cadence}</small></div><span>{task.running ? '执行中' : task.finishedAt ? syncTime(task.finishedAt) : '尚未运行'}</span><b>{task.warningCount ? `${task.warningCount} 条告警` : `${task.recordsWritten} 条写入`}</b><button className="sync-run-button" disabled={task.running || anyRunning} onClick={() => onRun(task.key)}><Play size={12} />{task.running ? '执行中' : '运行'}</button></article>)}</section>
+  </>
+}
 
 type ReportDetail = {
   report: ReportSummary
