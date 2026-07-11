@@ -8,12 +8,16 @@
     "build": "tsc --noEmit && vite build",
     "server": "tsx server/index.ts",
     "db:schema": "tsx scripts/apply-schema.ts",
+    "seed:space-sectors": "tsx scripts/seed-space-sectors.ts",
     "import:companies": "tsx scripts/import-company-pool.ts",
     "ingest:quotes": ".venv313/bin/python scripts/ingest-akshare.py",
     "ingest:metrics": ".venv313/bin/python scripts/ingest-akshare.py --metrics-only",
+    "ingest:announcements": ".venv313/bin/python scripts/ingest-announcements.py",
+    "extract:events": ".venv313/bin/python scripts/extract-events.py",
     "ingest:boards": "tsx scripts/aggregate-boards.ts",
     "ingest:industry": ".venv313/bin/python scripts/ingest-company-industry.py",
-    "ingest:concepts": ".venv313/bin/python scripts/ingest-company-concepts.py"
+    "ingest:concepts": ".venv313/bin/python scripts/ingest-company-concepts.py",
+    "ingest:finance": ".venv313/bin/python scripts/ingest-baostock-finance.py"
   },
   "dependencies": {
     "cors": "^2.8.5",
