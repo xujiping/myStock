@@ -112,40 +112,76 @@ function parseKeyPoints(raw) {
   }
 }
 
+function parseJsonObject(raw) {
+  if (!raw) return null;
+  if (typeof raw === "object") return raw;
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 function daysBetween(dateString, now = new Date()) {
   const date = new Date(`${dateString}T00:00:00+08:00`);
   if (Number.isNaN(date.getTime())) return Number.POSITIVE_INFINITY;
   return Math.floor((now.getTime() - date.getTime()) / (24 * 60 * 60 * 1000));
 }
 
-function buildDecisionHorizon({ key, title, days, intent, items, now }) {
-  const scopedItems = items.filter((item) => daysBetween(item.entry_date, now) <= days);
-  const evidence = scopedItems
-    .flatMap((item) => item.key_points.map((point) => ({
-      point,
-      creator_name: item.creator_name,
-      entry_date: item.entry_date,
-    })))
-    .slice(0, 8);
+function buildDecisionHorizon({ key, title, period, sourceDays, intent, items, now }) {
+  const scopedItems = items.filter((item) => daysBetween(item.entry_date, now) <= sourceDays);
   const creators = new Set(scopedItems.map((item) => item.creator_id));
   return {
     key,
     title,
-    days,
+    period,
+    source_days: sourceDays,
     intent,
     summary_count: scopedItems.length,
     creator_count: creators.size,
-    evidence,
     updated_at: scopedItems[0]?.entry_date || null,
-    basis: scopedItems.length
-      ? `来自近 ${days} 天 ${creators.size} 位博主的 ${scopedItems.length} 张每日观点卡。`
-      : `近 ${days} 天还没有可用于决策的已总结观点卡。`,
+    basis: key === "short"
+      ? (scopedItems.length
+        ? `短期仅参考近 ${sourceDays} 天（优先最新）的 ${creators.size} 位博主、${scopedItems.length} 张每日观点卡。`
+        : `近 ${sourceDays} 天还没有可用于短期判断的已总结观点卡。`)
+      : (scopedItems.length
+        ? `基于持续入库的${title}策略，本次用近 ${sourceDays} 天 ${creators.size} 位博主、${scopedItems.length} 张新观点卡校准。`
+        : `沿用已入库的${title}策略，等待新的每日观点卡再校准。`),
   };
 }
 
 function dashboardSourceSignature(items) {
-  const source = items.map((item) => `${item.id}:${item.entry_date}:${new Date(item.updated_at).toISOString()}`).join("|");
+  const source = ["investment-strategy-v8", ...items.map((item) => `${item.id}:${item.entry_date}:${new Date(item.updated_at).toISOString()}`)].join("|");
   return createHash("sha256").update(source).digest("hex");
+}
+
+async function saveInvestmentDirectionStates({ analysis, previousDirections, sourceSignature, model }) {
+  const directions = new Map((analysis?.horizons || []).map((horizon) => [horizon.key, horizon]));
+  for (const horizonKey of ["mid", "long"]) {
+    const direction = directions.get(horizonKey);
+    if (!direction) continue;
+    const previousDirection = previousDirections[horizonKey] || null;
+    await run(`
+      INSERT INTO ms_investment_direction_states (horizon_key, source_signature, model, direction)
+      VALUES (?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE source_signature = VALUES(source_signature), model = VALUES(model), direction = VALUES(direction), generated_at = CURRENT_TIMESTAMP
+    `, [horizonKey, sourceSignature, model, JSON.stringify(direction)]);
+    await run(`
+      INSERT INTO ms_investment_direction_revisions
+        (id, horizon_key, source_signature, model, strategy_status, previous_direction, direction, adjustment_note)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      nanoid(),
+      horizonKey,
+      sourceSignature,
+      model,
+      direction.strategy_status || "new",
+      previousDirection ? JSON.stringify(previousDirection) : null,
+      JSON.stringify(direction),
+      direction.adjustment_note || null,
+    ]);
+  }
 }
 
 app.get("/api/health", (_req, res) => {
@@ -169,12 +205,34 @@ app.get("/api/dashboard", async (_req, res, next) => {
       key_points: parseKeyPoints(row.key_points),
     }));
     const now = new Date();
+    const recentItems = items
+      .filter((item) => daysBetween(item.entry_date, now) <= 7)
+      .sort((left, right) => {
+        const dateOrder = String(right.entry_date).localeCompare(String(left.entry_date));
+        return dateOrder || new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime();
+      });
     const baseHorizons = [
-      buildDecisionHorizon({ key: "short", title: "短期", days: 7, intent: "短期执行", items, now }),
-      buildDecisionHorizon({ key: "mid", title: "中期", days: 30, intent: "中期配置", items, now }),
-      buildDecisionHorizon({ key: "long", title: "长期", days: 90, intent: "长期主线", items, now }),
+      buildDecisionHorizon({ key: "short", title: "短期", period: "未来 10-15 天", sourceDays: 7, intent: "短期执行", items: recentItems, now }),
+      buildDecisionHorizon({ key: "mid", title: "中期", period: "1-6 个月", sourceDays: 7, intent: "中期配置", items: recentItems, now }),
+      buildDecisionHorizon({ key: "long", title: "长期", period: "6 个月以上", sourceDays: 7, intent: "长期主线", items: recentItems, now }),
     ];
-    const sourceSignature = dashboardSourceSignature(items);
+    const states = await all("SELECT horizon_key, direction FROM ms_investment_direction_states WHERE horizon_key IN ('mid', 'long')");
+    const previousDirections = Object.fromEntries(states.map((state) => [state.horizon_key, parseJsonObject(state.direction)]));
+    const revisionRows = await all(`
+      SELECT horizon_key, strategy_status, direction, adjustment_note, created_at
+      FROM ms_investment_direction_revisions
+      WHERE horizon_key IN ('mid', 'long')
+      ORDER BY created_at DESC
+      LIMIT 16
+    `);
+    const strategyHistory = { mid: [], long: [] };
+    revisionRows.forEach((revision) => {
+      strategyHistory[revision.horizon_key]?.push({
+        ...revision,
+        direction: parseJsonObject(revision.direction),
+      });
+    });
+    const sourceSignature = dashboardSourceSignature(recentItems);
     const cached = await get("SELECT source_signature, model, analysis, generated_at FROM ms_dashboard_analyses WHERE scope_key = 'default'");
     let cachedAnalysis = cached?.analysis;
     if (typeof cachedAnalysis === "string") {
@@ -189,10 +247,15 @@ app.get("/api/dashboard", async (_req, res, next) => {
     let analysisModel = cached?.model || null;
     let generatedAt = cached?.generated_at || null;
     if (!cached || cached.source_signature !== sourceSignature) {
-      const generated = await analyzeDashboard(baseHorizons.map((horizon) => ({ ...horizon, items: items.filter((item) => daysBetween(item.entry_date, now) <= horizon.days) })));
+      const generated = await analyzeDashboard({
+        horizons: baseHorizons.map((horizon) => ({ ...horizon, items: recentItems })),
+        previousDirections,
+        strategyHistory,
+      });
       analysis = generated.analysis;
       analysisModel = generated.model;
       generatedAt = new Date().toISOString();
+      await saveInvestmentDirectionStates({ analysis, previousDirections, sourceSignature, model: analysisModel });
       await run(`
         INSERT INTO ms_dashboard_analyses (scope_key, source_signature, model, analysis)
         VALUES ('default', ?, ?, ?)
@@ -207,17 +270,19 @@ app.get("/api/dashboard", async (_req, res, next) => {
       focus: analysisByKey.get(horizon.key)?.focus || "样本不足，暂不形成独立关注方向。",
       suggestion: analysisByKey.get(horizon.key)?.suggestion || "补齐更多已总结的每日观点卡后再评估。",
       cautions: analysisByKey.get(horizon.key)?.cautions || ["当前样本不足，不应据此形成仓位决策。"],
+      strategy_status: analysisByKey.get(horizon.key)?.strategy_status || "new",
+      adjustment_note: analysisByKey.get(horizon.key)?.adjustment_note || "等待更多每日观点卡后再判断是否调整。",
     }));
     res.json({
       generated_at: now.toISOString(),
       totals: {
-        summary_count: items.length,
-        creator_count: new Set(items.map((item) => item.creator_id)).size,
-        latest_date: items[0]?.entry_date || null,
+        summary_count: recentItems.length,
+        creator_count: new Set(recentItems.map((item) => item.creator_id)).size,
+        latest_date: recentItems[0]?.entry_date || null,
       },
       horizons,
       analysis: { model: analysisModel, generated_at: generatedAt, source_signature: sourceSignature },
-      recent_entries: items.slice(0, 8).map((item) => ({
+      recent_entries: recentItems.slice(0, 8).map((item) => ({
         id: item.id,
         creator_name: item.creator_name,
         entry_date: item.entry_date,

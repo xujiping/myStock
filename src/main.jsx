@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { AlertTriangle, CalendarDays, CheckCircle2, ChevronDown, ClipboardList, Clock3, FileText, FileVideo, Home, Library, Menu, Pencil, RefreshCw, Search, Sparkles, Target, Trash2, TrendingUp, Upload, UserRound, X } from "lucide-react";
 import "./styles.css";
+import RocketInfographic from "./rocket-infographic";
 
 const apiBase = import.meta.env.VITE_API_BASE || "http://localhost:5174";
 
@@ -691,6 +692,19 @@ function TimelineDay({ date, entries, onRefresh, onDelete }) {
 function DecisionDashboard({ dashboard, loading, refreshing, onRefresh, onCreate, onOpenArchive }) {
   const horizons = dashboard?.horizons || [];
   const totals = dashboard?.totals || {};
+  const strategyStatusLabel = {
+    new: "首次建立",
+    maintain: "延续原方向",
+    adjust: "微调方向",
+    reverse: "转向",
+  };
+  const creatorViews = Object.values((dashboard?.recent_entries || []).reduce((groups, entry) => {
+    if (!groups[entry.creator_name]) {
+      groups[entry.creator_name] = { creator_name: entry.creator_name, entries: [] };
+    }
+    groups[entry.creator_name].entries.push(entry);
+    return groups;
+  }, {}));
 
   return (
     <section className="home-board">
@@ -714,7 +728,7 @@ function DecisionDashboard({ dashboard, loading, refreshing, onRefresh, onCreate
 
       <section className="home-stats" aria-label="观点统计">
         <div>
-          <span>已总结观点卡</span>
+          <span>近期校准观点卡</span>
           <strong>{totals.summary_count || 0}</strong>
         </div>
         <div>
@@ -741,28 +755,47 @@ function DecisionDashboard({ dashboard, loading, refreshing, onRefresh, onCreate
                     {horizon.key === "long" && <TrendingUp size={20} />}
                   </div>
                   <div>
-                    <p className="eyebrow">近 {horizon.days} 天</p>
+                    <p className="eyebrow">目标周期 · {horizon.period}</p>
                     <h2>{horizon.title}方向</h2>
                   </div>
                 </header>
                 <p className="decision-text">{horizon.focus}</p>
                 <p className="decision-suggestion">{horizon.suggestion}</p>
-                <p className="decision-basis">{horizon.basis}</p>
+
+                <section className="strategy-update" aria-label="本次策略判断">
+                  <strong>本次判断 · {strategyStatusLabel[horizon.strategy_status] || "首次建立"}</strong>
+                  <p>{horizon.adjustment_note}</p>
+                </section>
+
+                {(horizon.creator_views || []).length ? (
+                  <section className="creator-direction-list" aria-label={`${horizon.title}博主观点`}>
+                    <strong>{horizon.key === "short" ? "博主短期观点" : "具备持续性依据的博主观点"}</strong>
+                    <ol>
+                      {horizon.creator_views.map((creator) => (
+                        <li key={creator.creator_name}>
+                          <strong>{creator.creator_name}</strong>
+                          <span>{creator.views.join("；")}</span>
+                        </li>
+                      ))}
+                    </ol>
+                  </section>
+                ) : null}
+
+                {(horizon.disagreements || []).length ? (
+                  <section className="disagreement-list" aria-label={`${horizon.title}观点分歧`}>
+                    <strong>观点分歧</strong>
+                    {horizon.disagreements.map((disagreement) => (
+                      <p key={disagreement.topic}>
+                        <b>{disagreement.topic}</b>
+                        <span>{disagreement.viewpoints.join("；")}</span>
+                      </p>
+                    ))}
+                  </section>
+                ) : null}
 
                 <section className="caution-list" aria-label="注意事项">
                   <strong>注意事项</strong>
                   {horizon.cautions.map((caution) => <p key={caution}>{caution}</p>)}
-                </section>
-
-                <section className="evidence-list">
-                  {horizon.evidence.length ? horizon.evidence.slice(0, 3).map((item, index) => (
-                    <p key={`${item.creator_name}-${item.entry_date}-${index}`}>
-                      <strong>{item.creator_name}</strong>
-                      <span>{item.point}</span>
-                    </p>
-                  )) : (
-                    <p className="muted-line">在归档中生成 AI 总结后，这里会自动出现依据。</p>
-                  )}
                 </section>
               </article>
             ))}
@@ -772,21 +805,28 @@ function DecisionDashboard({ dashboard, loading, refreshing, onRefresh, onCreate
             <header>
               <div>
                 <p className="eyebrow">Recent Signals</p>
-                <h2>近期结论来源</h2>
+                <h2>近期博主观点</h2>
               </div>
               <button className="ghost-button" onClick={onOpenArchive}>
                 <Library size={17} />
                 查看归档
               </button>
             </header>
-            <div className="recent-summary-list">
-              {(dashboard?.recent_entries || []).length ? dashboard.recent_entries.map((entry) => (
-                <article className="recent-summary" key={entry.id}>
-                  <div>
-                    <span>{entry.entry_date}</span>
-                    <strong>{entry.creator_name}</strong>
-                  </div>
-                  <p>{entry.ai_summary}</p>
+            <div className="creator-view-list">
+              {creatorViews.length ? creatorViews.map((creator) => (
+                <article className="creator-view" key={creator.creator_name}>
+                  <header>
+                    <strong>{creator.creator_name}</strong>
+                    <span>{creator.entries.length} 条近期观点</span>
+                  </header>
+                  <ol>
+                    {creator.entries.map((entry) => (
+                      <li key={entry.id}>
+                        <time>{entry.entry_date}</time>
+                        <p>{entry.ai_summary}</p>
+                      </li>
+                    ))}
+                  </ol>
                 </article>
               )) : (
                 <div className="empty-state">还没有已总结的每日观点卡。先在归档中上传资料并点击 AI 总结。</div>
@@ -954,10 +994,14 @@ function App() {
             <Library size={17} />
             观点归档
           </button>
+          <button className={view === "aerospace" ? "active" : ""} onClick={() => switchView("aerospace")}>
+            <Target size={17} />
+            航天图谱
+          </button>
         </nav>
       </aside>
 
-      <section className="workspace">
+      <section className={`workspace${view === "aerospace" ? " aerospace-workspace" : ""}`}>
         <UploadModal creators={creators} isOpen={uploadOpen} onClose={() => setUploadOpen(false)} onUploaded={() => {
           loadEntries({ quiet: true });
           loadCreators();
@@ -972,6 +1016,8 @@ function App() {
             onCreate={() => setUploadOpen(true)}
             onOpenArchive={() => switchView("archive")}
           />
+        ) : view === "aerospace" ? (
+          <RocketInfographic embedded />
         ) : (
           <>
             <Filters date={date} setDate={setDate} query={query} setQuery={setQuery} refresh={() => loadEntries({ quiet: true })} onCreate={() => setUploadOpen(true)} />
@@ -991,4 +1037,6 @@ function App() {
   );
 }
 
-createRoot(document.getElementById("root")).render(<App />);
+const isRocketDemo = new URLSearchParams(window.location.search).get("demo") === "rocket";
+
+createRoot(document.getElementById("root")).render(isRocketDemo ? <RocketInfographic /> : <App />);

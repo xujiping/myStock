@@ -145,6 +145,12 @@ button {
   gap: var(--space-xl);
 }
 
+.workspace.aerospace-workspace {
+  width: 100%;
+  padding: 0;
+  gap: 0;
+}
+
 .eyebrow {
   margin: 0 0 var(--space-sm);
   color: var(--accent);
@@ -372,13 +378,14 @@ textarea:focus {
 .text-source {
   display: grid;
   height: 100%;
+  min-height: 420px;
   min-width: 0;
 }
 
 .text-source textarea {
   height: 100%;
-  min-height: 0;
-  resize: none;
+  min-height: 360px;
+  resize: vertical;
 }
 
 .text-content-field {
@@ -683,7 +690,6 @@ textarea:focus {
   overflow-wrap: anywhere;
 }
 
-.decision-basis,
 .muted-line {
   margin: 0;
   color: var(--muted);
@@ -696,6 +702,89 @@ textarea:focus {
   border-left: 3px solid color-mix(in oklch, var(--accent) 52%, var(--line));
   color: var(--muted);
   line-height: 1.6;
+}
+
+.strategy-update {
+  display: grid;
+  gap: var(--space-sm);
+  padding: var(--space-md) 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.strategy-update strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.strategy-update p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.creator-direction-list {
+  display: grid;
+  gap: var(--space-sm);
+}
+
+.creator-direction-list > strong {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.creator-direction-list ol {
+  display: grid;
+  gap: var(--space-sm);
+  margin: 0;
+  padding-left: 22px;
+}
+
+.creator-direction-list li {
+  padding-left: var(--space-xs);
+  color: var(--ink);
+  line-height: 1.55;
+}
+
+.creator-direction-list li strong {
+  margin-right: var(--space-sm);
+  font-size: 13px;
+}
+
+.creator-direction-list li span {
+  color: var(--muted);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.disagreement-list {
+  display: grid;
+  gap: var(--space-sm);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--line);
+}
+
+.disagreement-list > strong {
+  color: var(--accent);
+  font-size: 12px;
+}
+
+.disagreement-list p {
+  display: grid;
+  gap: var(--space-xs);
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.disagreement-list b {
+  color: var(--ink);
+}
+
+.disagreement-list span {
+  color: var(--muted);
+  overflow-wrap: anywhere;
 }
 
 .caution-list {
@@ -748,44 +837,19 @@ textarea:focus {
   color: var(--muted);
 }
 
-.evidence-list {
-  display: grid;
-  gap: var(--space-sm);
-}
-
-.evidence-list p {
-  display: grid;
-  gap: var(--space-xs);
-  margin: 0;
-  padding: var(--space-md);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: oklch(96% 0.018 86);
-}
-
-.evidence-list strong {
-  font-size: 13px;
-}
-
-.evidence-list span {
-  color: var(--muted);
-  line-height: 1.55;
-  overflow-wrap: anywhere;
-}
-
 .recent-summaries {
   display: grid;
   gap: var(--space-lg);
   min-width: 0;
 }
 
-.recent-summary-list {
+.creator-view-list {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-md);
 }
 
-.recent-summary {
+.creator-view {
   display: grid;
   gap: var(--space-md);
   min-width: 0;
@@ -795,7 +859,7 @@ textarea:focus {
   background: var(--surface);
 }
 
-.recent-summary div {
+.creator-view header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -803,29 +867,44 @@ textarea:focus {
   min-width: 0;
 }
 
-.recent-summary span {
+.creator-view header span {
   color: var(--muted);
   font-size: 13px;
   font-weight: 800;
   white-space: nowrap;
 }
 
-.recent-summary strong {
+.creator-view header strong {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.recent-summary p {
-  display: -webkit-box;
+.creator-view ol {
+  display: grid;
+  gap: var(--space-md);
+  margin: 0;
+  padding-left: 22px;
+}
+
+.creator-view li {
+  padding-left: var(--space-xs);
+}
+
+.creator-view time {
+  display: block;
+  margin-bottom: var(--space-xs);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.creator-view p {
   margin: 0;
   color: var(--muted);
   line-height: 1.65;
-  overflow: hidden;
   overflow-wrap: anywhere;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
 }
 
 .create-button {
@@ -1582,7 +1661,7 @@ textarea:focus {
 
   .home-actions,
   .home-stats,
-  .recent-summary-list {
+  .creator-view-list {
     grid-template-columns: 1fr;
   }
 

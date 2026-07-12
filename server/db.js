@@ -104,6 +104,32 @@ export async function initDb() {
       updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=${charset} COLLATE=${charset}_unicode_ci
   `);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS ${tablePrefix}investment_direction_states (
+      horizon_key VARCHAR(32) PRIMARY KEY,
+      source_signature CHAR(64) NOT NULL,
+      model VARCHAR(255) NOT NULL,
+      direction JSON NOT NULL,
+      generated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=${charset} COLLATE=${charset}_unicode_ci
+  `);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS ${tablePrefix}investment_direction_revisions (
+      id VARCHAR(32) PRIMARY KEY,
+      horizon_key VARCHAR(32) NOT NULL,
+      source_signature CHAR(64) NOT NULL,
+      model VARCHAR(255) NOT NULL,
+      strategy_status VARCHAR(32) NOT NULL,
+      previous_direction JSON,
+      direction JSON NOT NULL,
+      adjustment_note TEXT,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_ms_direction_revisions_horizon_created (horizon_key, created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=${charset} COLLATE=${charset}_unicode_ci
+  `);
 }
 
 export async function all(sql, params = []) {

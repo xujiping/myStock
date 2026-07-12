@@ -214,66 +214,158 @@ async function llmDigest(materials) {
   throw userError("未配置 AI 总结模型。请在 .env 中配置 OLLAMA_MODEL，或配置 OPENAI_COMPATIBLE_BASE_URL、OPENAI_COMPATIBLE_API_KEY、OPENAI_COMPATIBLE_MODEL。");
 }
 
-function parseDashboardAnalysis(text) {
+function parseDashboardHorizon(text, expectedKey) {
   const cleaned = text.replace(/^```json\s*/i, "").replace(/```$/i, "").trim();
   const match = cleaned.match(/\{[\s\S]*\}/);
   const parsed = JSON.parse(match ? match[0] : cleaned);
-  const horizons = Array.isArray(parsed.horizons) ? parsed.horizons : [];
+  if (String(parsed.key || "").trim() !== expectedKey) {
+    throw new Error(`首页投资分析返回了错误周期：期望 ${expectedKey}`);
+  }
   return {
-    horizons: horizons.map((item) => ({
-      key: String(item.key || "").trim(),
-      focus: String(item.focus || "").trim(),
-      suggestion: String(item.suggestion || "").trim(),
-      cautions: Array.isArray(item.cautions)
-        ? item.cautions.map((caution) => String(caution).trim()).filter(Boolean).slice(0, 3)
-        : [],
-    })).filter((item) => ["short", "mid", "long"].includes(item.key)),
+    key: expectedKey,
+    focus: String(parsed.focus || "").trim(),
+    suggestion: String(parsed.suggestion || "").trim(),
+    cautions: Array.isArray(parsed.cautions)
+      ? parsed.cautions.map((caution) => String(caution).trim()).filter(Boolean).slice(0, 3)
+      : [],
+    creator_views: Array.isArray(parsed.creator_views)
+      ? parsed.creator_views.map((view) => ({
+        creator_name: String(view?.creator_name || "").trim(),
+        views: Array.isArray(view?.views)
+          ? view.views.map((point) => String(point).trim()).filter(Boolean).slice(0, 3)
+          : [],
+      })).filter((view) => view.creator_name && view.views.length)
+      : [],
+    disagreements: Array.isArray(parsed.disagreements)
+      ? parsed.disagreements.map((item) => ({
+        topic: String(item?.topic || "").trim(),
+        viewpoints: Array.isArray(item?.viewpoints)
+          ? item.viewpoints.map((viewpoint) => String(viewpoint).trim()).filter(Boolean).slice(0, 3)
+          : [],
+      })).filter((item) => item.topic && item.viewpoints.length >= 2).slice(0, 2)
+      : [],
+    strategy_status: ["new", "maintain", "adjust", "reverse"].includes(parsed.strategy_status)
+      ? parsed.strategy_status
+      : "new",
+    adjustment_note: String(parsed.adjustment_note || "").trim(),
   };
 }
 
-function buildDashboardPrompt(horizons) {
-  const sections = horizons.map((horizon) => {
-    const cards = horizon.items.map((item) => [
-      `[${item.entry_date}] ${item.creator_name}`,
-      `总述：${String(item.ai_summary || "").slice(0, 420)}`,
-      `要点：${item.key_points.slice(0, 4).join("；")}`,
-    ].join("\n")).join("\n\n");
-    return `## ${horizon.title}（近 ${horizon.days} 天，${horizon.items.length} 张每日观点卡）\n${cards || "暂无可用观点卡"}`;
-  });
+function parseDirection(raw) {
+  if (!raw) return null;
+  if (typeof raw === "object") return raw;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
 
+function formatDirection(direction) {
+  if (!direction) return "尚无上一版策略，首次建立方向。";
   return [
-    "你是审慎的中国市场投资研究助理。只能基于提供的每日观点卡分析，不得补充事实、预测具体价格、承诺收益或给出个股买卖指令。",
-    "请区分短期、中期、长期：短期强调触发条件和仓位纪律，中期强调配置线索与验证，长期强调结构性主线与持续跟踪。样本重叠或不足时必须明确指出，不能为了差异而编造差异。",
-    "输出简洁、专业、可执行的 JSON，不要 Markdown：",
-    '{"horizons":[{"key":"short","focus":"不超过55字的关注方向","suggestion":"不超过90字的执行建议","cautions":["注意事项1","注意事项2"]},{"key":"mid","focus":"...","suggestion":"...","cautions":["..."]},{"key":"long","focus":"...","suggestion":"...","cautions":["..."]}]}',
-    "每项都应保留核心观点；注意事项应优先覆盖样本不足、验证条件、流动性、波动与风险控制。",
-    "\n以下是已经总结的每日观点卡：\n",
-    sections.join("\n\n"),
+    `关注方向：${direction.focus || "未记录"}`,
+    `执行建议：${direction.suggestion || "未记录"}`,
+    `注意事项：${Array.isArray(direction.cautions) ? direction.cautions.join("；") : "未记录"}`,
   ].join("\n");
 }
 
-export async function analyzeDashboard(horizons) {
+function formatStrategyHistory(revisions) {
+  if (!revisions?.length) return "暂无更早修订记录。";
+  return revisions.map((revision) => [
+    `[${revision.created_at}] ${revision.strategy_status || "历史版本"}`,
+    `关注方向：${revision.direction?.focus || "未记录"}`,
+    `调整说明：${revision.adjustment_note || revision.direction?.adjustment_note || "未记录"}`,
+  ].join("\n")).join("\n\n");
+}
+
+function buildDashboardPrompt({ horizon, previousDirection, strategyHistory }) {
+  const latestDate = horizon.items[0]?.entry_date || "暂无";
+  const cards = horizon.items.map((item) => [
+    `[${item.entry_date}] ${item.creator_name}`,
+    `总述：${String(item.ai_summary || "").slice(0, 420)}`,
+    `要点：${item.key_points.slice(0, 4).join("；")}`,
+  ].join("\n")).join("\n\n");
+
+  const commonRules = [
+    "你是审慎的中国市场投资研究助理。只能基于提供的每日观点卡分析，不得补充事实、预测具体价格、承诺收益或给出个股买卖指令。",
+    `本次判断截至 ${latestDate}。每日观点卡按日期、同日更新时间从新到旧排列，第一张卡是当前最新信息。`,
+    "时间顺序是裁决规则，不是一般权重：先根据最新卡片形成当前判断，再用较早卡片验证、解释或识别已被推翻的旧判断；不得把新旧相反观点简单平均、投票或拼接成折中结论。",
+    "同一博主对同一主题前后观点相反时，最新日期的明确观点代表该博主当前立场，旧观点只可作为变化背景。不同博主对同一主题相反时，保留真实分歧；当前策略应优先采纳日期更新且证据更直接的一方，同时在注意事项中说明仍待验证的分歧，不得伪造共识。",
+    "creator_views 是策略卡内按博主聚合的序号列表：同一博主多日观点必须合并，不得按日期拆分；只能使用资料中出现的博主名。短期可列出相关博主。中长期仅列具备明确持续性证据的博主，没有则输出空数组，不能为了完整性凑齐每位博主。",
+    "disagreements 只记录对同一主题存在实质相反判断的真实分歧，并且必须写清各博主的不同立场；只是关注点不同不算分歧。没有真实分歧就输出空数组，禁止编造。",
+    "每项都应保留核心观点；注意事项应优先覆盖样本不足、验证条件、流动性、波动与风险控制。",
+  ];
+  const outputShape = JSON.stringify({
+    key: horizon.key,
+    focus: "不超过55字的关注方向",
+    suggestion: "不超过90字的执行建议",
+    cautions: ["注意事项1", "注意事项2"],
+    creator_views: [{ creator_name: "博主名", views: ["合并后的观点1", "观点2"] }],
+    disagreements: [{ topic: "分歧主题", viewpoints: ["博主甲：观点", "博主乙：相反观点"] }],
+    strategy_status: "new|maintain|adjust|reverse",
+    adjustment_note: "不超过60字，说明本次依据或调整原因",
+  });
+
+  const horizonRules = horizon.key === "short"
+    ? [
+      "本次只分析短期，目标持有周期为未来 10-15 天。只根据近 7 天观点给出交易环境、触发条件和仓位纪律。",
+      "最新观点若明确改变了市场环境、主线或风险判断，应直接覆盖较早的短期判断；较早信号不能因为数量更多而抵消最新变化。",
+      "不要引用或推断中长期策略，也不要把短期信号包装成中长期结论。strategy_status 固定输出 new。",
+    ]
+    : [
+      `本次只分析${horizon.title}，目标周期为${horizon.period}。这不是近 7 天观点的直接总结，而是持续积累的全局策略：以上一版策略和该周期自身的历史修订过程为基础，用近 7 天信息校准。`,
+      "每日观点卡只是博主的短期信号，不代表每位博主、每张卡都具备中长期判断。只有最新卡片揭示政策落地、产业趋势、宏观变量或重大风险等具有持续性的明确证据，才允许 adjust 或 reverse；一旦满足，应以最新证据优先修正甚至推翻旧策略，并在 adjustment_note 写明触发变化的最新日期和原因。",
+      "若最新观点只是情绪、估值、资金或技术面波动，不能推翻中长期策略，应 maintain 并明确其只影响短期执行。证据不足时不得因为观点更新而机械调整。",
+      `\n上一版${horizon.title}策略：\n${formatDirection(parseDirection(previousDirection))}`,
+      `\n${horizon.title}历史修订过程（新到旧）：\n${formatStrategyHistory(strategyHistory)}`,
+    ];
+
+  return [
+    ...commonRules,
+    ...horizonRules,
+    "输出简洁、专业、可执行的 JSON，不要 Markdown。只能返回一个当前周期的对象，不能返回 horizons 数组：",
+    outputShape,
+    "\n以下是本次用于更新的近 7 天每日观点卡：\n",
+    cards || "暂无可用观点卡",
+  ].join("\n");
+}
+
+export async function analyzeDashboard({ horizons, previousDirections, strategyHistory }) {
   if (!process.env.OPENAI_COMPATIBLE_BASE_URL || !process.env.OPENAI_COMPATIBLE_API_KEY) {
     throw userError("未配置首页投资分析模型。请在 .env 中配置 OPENAI_COMPATIBLE_BASE_URL 与 OPENAI_COMPATIBLE_API_KEY。", 503);
   }
 
   const model = process.env.DASHBOARD_MODEL || "deepseek-v4-pro";
-  const response = await fetch(`${process.env.OPENAI_COMPATIBLE_BASE_URL.replace(/\/$/, "")}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${process.env.OPENAI_COMPATIBLE_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model,
-      temperature: 0.2,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: "你只输出合法 JSON。" },
-        { role: "user", content: buildDashboardPrompt(horizons) },
-      ],
-    }),
-  });
-  if (!response.ok) throw userError(`首页投资分析失败：HTTP ${response.status} ${await response.text()}`, 502);
-  return { model, analysis: parseDashboardAnalysis((await response.json()).choices?.[0]?.message?.content || "") };
+  const analyzeHorizon = async (horizon) => {
+    const response = await fetch(`${process.env.OPENAI_COMPATIBLE_BASE_URL.replace(/\/$/, "")}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.OPENAI_COMPATIBLE_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model,
+        temperature: 0.2,
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: "你只输出合法 JSON。" },
+          {
+            role: "user",
+            content: buildDashboardPrompt({
+              horizon,
+              previousDirection: previousDirections[horizon.key],
+              strategyHistory: strategyHistory[horizon.key],
+            }),
+          },
+        ],
+      }),
+    });
+    if (!response.ok) throw userError(`${horizon.title}投资分析失败：HTTP ${response.status} ${await response.text()}`, 502);
+    const content = (await response.json()).choices?.[0]?.message?.content || "";
+    return parseDashboardHorizon(content, horizon.key);
+  };
+
+  const analyzedHorizons = await Promise.all(horizons.map((horizon) => analyzeHorizon(horizon)));
+  return { model, analysis: { horizons: analyzedHorizons } };
 }
