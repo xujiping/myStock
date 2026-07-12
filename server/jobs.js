@@ -1,7 +1,18 @@
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { db, touchEntry } from "./db.js";
+import { all, get, run as queryRun, touchEntry } from "./db.js";
+
+const videoQueue = [];
+const queuedVideoIds = new Set();
+const activeVideoIds = new Set();
+const videoProcessConcurrency = Math.max(1, Number(process.env.VIDEO_PROCESS_CONCURRENCY || 1) || 1);
+
+function userError(message, status = 400) {
+  const error = new Error(message);
+  error.status = status;
+  return error;
+}
 
 function run(command, args) {
   return new Promise((resolve, reject) => {
@@ -32,12 +43,46 @@ async function commandExists(command) {
   }
 }
 
+function drainVideoQueue() {
+  while (activeVideoIds.size < videoProcessConcurrency && videoQueue.length) {
+    const videoId = videoQueue.shift();
+    queuedVideoIds.delete(videoId);
+    activeVideoIds.add(videoId);
+
+    processVideo(videoId)
+      .catch((error) => console.error(`processVideo failed for ${videoId}:`, error))
+      .finally(() => {
+        activeVideoIds.delete(videoId);
+        drainVideoQueue();
+      });
+  }
+}
+
+export function enqueueVideoProcessing(videoId) {
+  if (!videoId || queuedVideoIds.has(videoId) || activeVideoIds.has(videoId)) return;
+  queuedVideoIds.add(videoId);
+  videoQueue.push(videoId);
+  drainVideoQueue();
+}
+
+export async function enqueuePendingVideoProcessing() {
+  const videos = await all(`
+    SELECT id
+    FROM ms_videos
+    WHERE status IN ('uploaded', 'extracting_audio', 'audio_ready', 'transcribing')
+      AND (transcript IS NULL OR transcript = '')
+    ORDER BY created_at
+  `);
+  videos.forEach((video) => enqueueVideoProcessing(video.id));
+  return videos.length;
+}
+
 export async function processVideo(videoId) {
-  const video = db.prepare("SELECT * FROM ms_videos WHERE id = ?").get(videoId);
+  const video = await get("SELECT * FROM ms_videos WHERE id = ?", [videoId]);
   if (!video) return;
 
   try {
-    db.prepare("UPDATE ms_videos SET status = 'extracting_audio', error = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(videoId);
+    await queryRun("UPDATE ms_videos SET status = 'extracting_audio', error = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?", [videoId]);
 
     const audioDir = path.resolve("uploads/audio");
     fs.mkdirSync(audioDir, { recursive: true });
@@ -57,16 +102,16 @@ export async function processVideo(videoId) {
       audioPath,
     ]);
 
-    db.prepare("UPDATE ms_videos SET audio_path = ?, status = 'audio_ready', updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(audioPath, videoId);
+    await queryRun("UPDATE ms_videos SET audio_path = ?, status = 'audio_ready', updated_at = CURRENT_TIMESTAMP WHERE id = ?", [audioPath, videoId]);
 
     const whisperCmd = process.env.WHISPER_CMD || "";
     if (!whisperCmd && !(await commandExists("whisper"))) {
-      db.prepare("UPDATE ms_videos SET status = 'needs_transcription', updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(videoId);
-      touchEntry(video.entry_id);
+      await queryRun("UPDATE ms_videos SET status = 'needs_transcription', updated_at = CURRENT_TIMESTAMP WHERE id = ?", [videoId]);
+      await touchEntry(video.entry_id);
       return;
     }
 
-    db.prepare("UPDATE ms_videos SET status = 'transcribing', updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(videoId);
+    await queryRun("UPDATE ms_videos SET status = 'transcribing', updated_at = CURRENT_TIMESTAMP WHERE id = ?", [videoId]);
     const cmd = whisperCmd || "whisper";
     const outputDir = path.resolve("uploads/audio");
     await run(cmd, [audioPath, "--language", "Chinese", "--model", process.env.WHISPER_MODEL || "small", "--output_format", "txt", "--output_dir", outputDir]);
@@ -74,47 +119,43 @@ export async function processVideo(videoId) {
     const transcriptPath = path.join(outputDir, `${path.basename(audioPath, ".wav")}.txt`);
     const transcript = fs.existsSync(transcriptPath) ? fs.readFileSync(transcriptPath, "utf8").trim() : "";
 
-    db.prepare("UPDATE ms_videos SET transcript = ?, status = 'transcribed', updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(transcript, videoId);
-    touchEntry(video.entry_id);
-    await summarizeEntry(video.entry_id);
+    await queryRun("UPDATE ms_videos SET transcript = ?, status = 'transcribed', updated_at = CURRENT_TIMESTAMP WHERE id = ?", [transcript, videoId]);
+    await queryRun("UPDATE ms_entries SET ai_summary = NULL, key_points = NULL, status = 'collecting', updated_at = CURRENT_TIMESTAMP WHERE id = ?", [video.entry_id]);
   } catch (error) {
-    db.prepare("UPDATE ms_videos SET status = 'failed', error = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(String(error.message || error), videoId);
-    touchEntry(video.entry_id);
+    await queryRun("UPDATE ms_videos SET status = 'failed', error = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", [String(error.message || error), videoId]);
+    await touchEntry(video.entry_id);
   }
 }
 
-function localDigest(transcripts) {
-  const text = transcripts.join("\n").replace(/\s+/g, " ").trim();
-  if (!text) return { summary: "", points: [] };
-  const sentences = text.split(/[。！？!?]/).map((item) => item.trim()).filter(Boolean);
-  const points = sentences.slice(0, 6).map((item) => (item.length > 80 ? `${item.slice(0, 80)}...` : item));
-  const summary = sentences.slice(0, 3).join("。") + (sentences.length ? "。" : "");
-  return { summary, points };
-}
-
 export async function summarizeEntry(entryId) {
-  const videos = db.prepare("SELECT transcript FROM ms_videos WHERE entry_id = ? AND transcript IS NOT NULL AND transcript != '' ORDER BY created_at").all(entryId);
-  const transcripts = videos.map((video) => video.transcript);
-  let digest = await llmDigest(transcripts).catch(() => null);
-  if (!digest) digest = localDigest(transcripts);
+  const videos = await all("SELECT transcript FROM ms_videos WHERE entry_id = ? AND transcript IS NOT NULL AND transcript != '' ORDER BY created_at", [entryId]);
+  const notes = await all("SELECT title, content FROM ms_text_notes WHERE entry_id = ? AND content != '' ORDER BY created_at", [entryId]);
+  const materials = [
+    ...videos.map((video, index) => `视频转写 ${index + 1}：\n${video.transcript}`),
+    ...notes.map((note, index) => `手动文本 ${index + 1}${note.title ? `（${note.title}）` : ""}：\n${note.content}`),
+  ];
+  if (!materials.length) {
+    return { summary: "", points: [] };
+  }
+  const digest = await llmDigest(materials);
 
-  db.prepare(`
+  await queryRun(`
     UPDATE ms_entries
     SET ai_summary = ?, key_points = ?, status = ?, updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
-  `).run(digest.summary, JSON.stringify(digest.points), transcripts.length ? "summarized" : "collecting", entryId);
+  `, [digest.summary, JSON.stringify(digest.points), materials.length ? "summarized" : "collecting", entryId]);
 
   return digest;
 }
 
-function buildSummaryPrompt(transcripts) {
+function buildSummaryPrompt(materials) {
   return [
     "你是一个帮助用户复盘博主观点的中文助理。",
-    "请基于下面同一位博主同一天多个短视频的转写内容，输出 JSON。",
+    "请基于下面同一位博主同一天的视频转写和手动文本资料，输出 JSON。",
     "JSON 格式：{\"summary\":\"不超过180字的每日总述\",\"points\":[\"观点1\",\"观点2\",\"观点3\"]}。",
-    "要求：提炼观点，不要编造；合并重复观点；保留可复盘的判断、理由和行动启发。",
+    "要求：提炼观点，不要编造；合并零散和重复观点；保留可复盘的判断、理由和行动启发。",
     "",
-    transcripts.join("\n\n---\n\n"),
+    materials.join("\n\n---\n\n"),
   ].join("\n");
 }
 
@@ -128,9 +169,9 @@ function parseJsonText(text) {
   };
 }
 
-async function llmDigest(transcripts) {
-  if (!transcripts.length) return null;
-  const prompt = buildSummaryPrompt(transcripts);
+async function llmDigest(materials) {
+  if (!materials.length) return null;
+  const prompt = buildSummaryPrompt(materials);
 
   if (process.env.OLLAMA_MODEL) {
     const response = await fetch(`${process.env.OLLAMA_URL || "http://localhost:11434"}/api/generate`, {
@@ -143,7 +184,7 @@ async function llmDigest(transcripts) {
         format: "json",
       }),
     });
-    if (!response.ok) throw new Error(`Ollama summary failed: ${response.status}`);
+    if (!response.ok) throw new Error(`Ollama 总结失败：HTTP ${response.status} ${await response.text()}`);
     const data = await response.json();
     return parseJsonText(data.response || "");
   }
@@ -165,10 +206,10 @@ async function llmDigest(transcripts) {
         ],
       }),
     });
-    if (!response.ok) throw new Error(`OpenAI-compatible summary failed: ${response.status}`);
+    if (!response.ok) throw new Error(`大模型总结失败：HTTP ${response.status} ${await response.text()}`);
     const data = await response.json();
     return parseJsonText(data.choices?.[0]?.message?.content || "");
   }
 
-  return null;
+  throw userError("未配置 AI 总结模型。请在 .env 中配置 OLLAMA_MODEL，或配置 OPENAI_COMPATIBLE_BASE_URL、OPENAI_COMPATIBLE_API_KEY、OPENAI_COMPATIBLE_MODEL。");
 }

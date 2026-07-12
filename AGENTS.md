@@ -5,8 +5,8 @@
 This repository is a local-first video review web app.
 
 - `src/`: React frontend. `main.jsx` contains the main UI flow; `styles.css` contains the responsive timeline and upload styles.
-- `server/`: Express backend. `index.js` defines API routes, `db.js` initializes SQLite, and `jobs.js` handles audio extraction, transcription, and AI summaries.
-- `data/`: Local SQLite database files. Do not commit this directory.
+- `server/`: Express backend. `index.js` defines API routes, `db.js` initializes MySQL tables, and `jobs.js` handles audio extraction, transcription, and AI summaries.
+- `data/`: Legacy local SQLite database files. Do not commit this directory.
 - `uploads/`: Uploaded videos and extracted audio. Do not commit this directory.
 - `dist/`: Vite production build output. Generated only.
 - `.env.example`: Configuration template. `.env` contains secrets and must stay local.

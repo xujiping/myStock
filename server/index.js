@@ -6,8 +6,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { nanoid } from "nanoid";
 import { fileURLToPath } from "node:url";
-import { db } from "./db.js";
-import { processVideo, summarizeEntry } from "./jobs.js";
+import { all, get, initDb, run } from "./db.js";
+import { enqueuePendingVideoProcessing, enqueueVideoProcessing, summarizeEntry } from "./jobs.js";
 
 const app = express();
 const port = Number(process.env.PORT || 5174);
@@ -42,103 +42,182 @@ function normalizeOriginalName(name) {
   return raw;
 }
 
-function ensureCreator(name) {
+async function ensureCreator(name) {
   const trimmed = String(name || "").trim();
   if (!trimmed) throw new Error("请填写博主名称");
-  const existing = db.prepare("SELECT * FROM ms_creators WHERE name = ?").get(trimmed);
+  const existing = await get("SELECT * FROM ms_creators WHERE name = ?", [trimmed]);
   if (existing) return existing;
   const id = nanoid();
-  db.prepare("INSERT INTO ms_creators (id, name) VALUES (?, ?)").run(id, trimmed);
-  return db.prepare("SELECT * FROM ms_creators WHERE id = ?").get(id);
+  await run("INSERT INTO ms_creators (id, name) VALUES (?, ?)", [id, trimmed]);
+  return get("SELECT * FROM ms_creators WHERE id = ?", [id]);
 }
 
-function ensureEntry(creatorId, date) {
+async function ensureEntry(creatorId, date) {
   const entryDate = date || new Date().toISOString().slice(0, 10);
-  const existing = db.prepare("SELECT * FROM ms_entries WHERE creator_id = ? AND entry_date = ?").get(creatorId, entryDate);
+  const existing = await get("SELECT * FROM ms_entries WHERE creator_id = ? AND entry_date = ?", [creatorId, entryDate]);
   if (existing) return existing;
   const id = nanoid();
-  db.prepare("INSERT INTO ms_entries (id, creator_id, entry_date, title) VALUES (?, ?, ?, ?)").run(id, creatorId, entryDate, `${entryDate} 观点`);
-  return db.prepare("SELECT * FROM ms_entries WHERE id = ?").get(id);
+  await run("INSERT INTO ms_entries (id, creator_id, entry_date, title) VALUES (?, ?, ?, ?)", [id, creatorId, entryDate, `${entryDate} 观点`]);
+  return get("SELECT * FROM ms_entries WHERE id = ?", [id]);
+}
+
+async function findIncompleteVideos(entryId) {
+  return all(`
+    SELECT id, original_name, status
+    FROM ms_videos
+    WHERE entry_id = ?
+      AND (transcript IS NULL OR transcript = '')
+    ORDER BY created_at
+  `, [entryId]);
+}
+
+async function getEntryDetail(entryId) {
+  const entry = await get(`
+    SELECT e.*, c.name AS creator_name, c.handle AS creator_handle
+    FROM ms_entries e
+    JOIN ms_creators c ON c.id = e.creator_id
+    WHERE e.id = ?
+  `, [entryId]);
+  if (!entry) return null;
+  return {
+    ...entry,
+    key_points: typeof entry.key_points === "string" ? JSON.parse(entry.key_points) : entry.key_points || [],
+    videos: await all("SELECT * FROM ms_videos WHERE entry_id = ? ORDER BY created_at DESC", [entry.id]),
+    text_notes: await all("SELECT * FROM ms_text_notes WHERE entry_id = ? ORDER BY created_at DESC", [entry.id]),
+  };
 }
 
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true });
 });
 
-app.get("/api/creators", (_req, res) => {
-  const creators = db.prepare(`
-    SELECT c.*, COUNT(v.id) AS video_count
-    FROM ms_creators c
-    LEFT JOIN ms_entries e ON e.creator_id = c.id
-    LEFT JOIN ms_videos v ON v.entry_id = e.id
-    GROUP BY c.id
-    ORDER BY c.created_at DESC
-  `).all();
-  res.json(creators);
+app.get("/api/creators", async (_req, res, next) => {
+  try {
+    const creators = await all(`
+      SELECT c.id, c.name, c.handle, c.note, c.created_at, COALESCE(vc.video_count, 0) AS video_count
+      FROM ms_creators c
+      LEFT JOIN (
+        SELECT e.creator_id, COUNT(v.id) AS video_count
+        FROM ms_entries e
+        LEFT JOIN ms_videos v ON v.entry_id = e.id
+        GROUP BY e.creator_id
+      ) vc ON vc.creator_id = c.id
+      ORDER BY c.created_at DESC
+    `);
+    res.json(creators);
+  } catch (error) {
+    next(error);
+  }
 });
 
-app.get("/api/entries", (req, res) => {
-  const { date, creatorId } = req.query;
-  const where = [];
-  const params = [];
-  if (date) {
-    where.push("e.entry_date = ?");
-    params.push(date);
-  }
-  if (creatorId) {
-    where.push("e.creator_id = ?");
-    params.push(creatorId);
-  }
-  const sql = `
+app.get("/api/entries", async (req, res, next) => {
+  try {
+    const { date, creatorId } = req.query;
+    const where = [];
+    const params = [];
+    if (date) {
+      where.push("e.entry_date = ?");
+      params.push(date);
+    }
+    if (creatorId) {
+      where.push("e.creator_id = ?");
+      params.push(creatorId);
+    }
+    const sql = `
     SELECT e.*, c.name AS creator_name, c.handle AS creator_handle
     FROM ms_entries e
     JOIN ms_creators c ON c.id = e.creator_id
     ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
     ORDER BY e.entry_date DESC, e.updated_at DESC
   `;
-  const entries = db.prepare(sql).all(...params).map((entry) => ({
-    ...entry,
-    key_points: entry.key_points ? JSON.parse(entry.key_points) : [],
-    videos: db.prepare("SELECT * FROM ms_videos WHERE entry_id = ? ORDER BY created_at DESC").all(entry.id),
-  }));
-  res.json(entries);
+    const entries = await all(sql, params);
+    const entriesWithVideos = await Promise.all(entries.map((entry) => getEntryDetail(entry.id)));
+    res.json(entriesWithVideos);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/entries/:id", async (req, res, next) => {
+  try {
+    const entry = await getEntryDetail(req.params.id);
+    if (!entry) return res.status(404).json({ error: "归档不存在" });
+    res.json(entry);
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.post("/api/upload", upload.array("videos", 50), async (req, res) => {
   try {
-    const creator = ensureCreator(req.body.creatorName);
-    const entry = ensureEntry(creator.id, req.body.entryDate);
+    const creator = await ensureCreator(req.body.creatorName);
+    const entry = await ensureEntry(creator.id, req.body.entryDate);
     const files = req.files || [];
-    const insert = db.prepare(`
-      INSERT INTO ms_videos (id, entry_id, original_name, video_path, status)
-      VALUES (?, ?, ?, ?, 'uploaded')
-    `);
-    const videos = files.map((file) => {
+    const videos = [];
+    for (const file of files) {
       const id = nanoid();
       const originalName = normalizeOriginalName(file.originalname);
-      insert.run(id, entry.id, originalName, file.path);
-      processVideo(id);
-      return { id, original_name: originalName };
-    });
+      await run(`
+      INSERT INTO ms_videos (id, entry_id, original_name, video_path, status)
+      VALUES (?, ?, ?, ?, 'uploaded')
+    `, [id, entry.id, originalName, file.path]);
+      enqueueVideoProcessing(id);
+      videos.push({ id, original_name: originalName });
+    }
+    await run("UPDATE ms_entries SET ai_summary = NULL, key_points = NULL, status = 'collecting', updated_at = CURRENT_TIMESTAMP WHERE id = ?", [entry.id]);
     res.json({ creator, entry, videos });
   } catch (error) {
     res.status(400).json({ error: String(error.message || error) });
   }
 });
 
-app.patch("/api/videos/:id/transcript", (req, res) => {
-  const video = db.prepare("SELECT * FROM ms_videos WHERE id = ?").get(req.params.id);
-  if (!video) return res.status(404).json({ error: "视频不存在" });
-  db.prepare("UPDATE ms_videos SET transcript = ?, status = 'transcribed', updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(String(req.body.transcript || ""), req.params.id);
-  summarizeEntry(video.entry_id);
-  res.json({ ok: true });
+app.post("/api/texts", async (req, res) => {
+  try {
+    const content = String(req.body.content || "").trim();
+    if (!content) throw new Error("请粘贴文本内容");
+    const creator = await ensureCreator(req.body.creatorName);
+    const entry = await ensureEntry(creator.id, req.body.entryDate);
+    const id = nanoid();
+    const title = String(req.body.title || "").trim() || "手动文本";
+    await run(`
+      INSERT INTO ms_text_notes (id, entry_id, title, content)
+      VALUES (?, ?, ?, ?)
+    `, [id, entry.id, title, content]);
+    await run("UPDATE ms_entries SET ai_summary = NULL, key_points = NULL, status = 'collecting', updated_at = CURRENT_TIMESTAMP WHERE id = ?", [entry.id]);
+    res.json({ creator, entry, text: { id, title, content } });
+  } catch (error) {
+    res.status(400).json({ error: String(error.message || error) });
+  }
 });
 
-app.post("/api/entries/:id/summarize", async (req, res) => {
-  const entry = db.prepare("SELECT * FROM ms_entries WHERE id = ?").get(req.params.id);
-  if (!entry) return res.status(404).json({ error: "归档不存在" });
-  const digest = await summarizeEntry(entry.id);
-  res.json(digest);
+app.patch("/api/videos/:id/transcript", async (req, res, next) => {
+  try {
+    const video = await get("SELECT * FROM ms_videos WHERE id = ?", [req.params.id]);
+    if (!video) return res.status(404).json({ error: "视频不存在" });
+    await run("UPDATE ms_videos SET transcript = ?, status = 'transcribed', updated_at = CURRENT_TIMESTAMP WHERE id = ?", [String(req.body.transcript || ""), req.params.id]);
+    await run("UPDATE ms_entries SET ai_summary = NULL, key_points = NULL, status = 'collecting', updated_at = CURRENT_TIMESTAMP WHERE id = ?", [video.entry_id]);
+    res.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/entries/:id/summarize", async (req, res, next) => {
+  try {
+    const entry = await get("SELECT * FROM ms_entries WHERE id = ?", [req.params.id]);
+    if (!entry) return res.status(404).json({ error: "归档不存在" });
+    const incompleteVideos = await findIncompleteVideos(entry.id);
+    if (incompleteVideos.length) {
+      return res.status(409).json({
+        error: `还有 ${incompleteVideos.length} 个视频未完成转写，不能总结。请等待转写完成或手动保存转写文本。`,
+        videos: incompleteVideos,
+      });
+    }
+    const digest = await summarizeEntry(entry.id);
+    res.json(digest);
+  } catch (error) {
+    next(error);
+  }
 });
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -149,6 +228,17 @@ if (fs.existsSync(distDir)) {
     if (req.method !== "GET" || req.path.startsWith("/api/")) return next();
     res.sendFile(path.join(distDir, "index.html"));
   });
+}
+
+app.use((error, _req, res, _next) => {
+  console.error(error);
+  res.status(error.status || 500).json({ error: String(error.message || error) });
+});
+
+await initDb();
+const resumedVideoCount = await enqueuePendingVideoProcessing();
+if (resumedVideoCount) {
+  console.log(`Resumed ${resumedVideoCount} pending video transcription job(s).`);
 }
 
 app.listen(port, () => {
