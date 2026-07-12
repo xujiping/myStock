@@ -35,6 +35,24 @@ function isVideoProcessing(video) {
   return ["uploaded", "extracting_audio", "audio_ready", "transcribing"].includes(video.status);
 }
 
+function isAerospaceProcessing(source) {
+  return ["uploaded", "extracting_audio", "audio_ready", "transcribing", "extracting"].includes(source.status);
+}
+
+function aerospaceStatusText(status) {
+  return {
+    uploaded: "已上传",
+    extracting_audio: "抽取音频",
+    audio_ready: "音频就绪",
+    needs_transcription: "待转写",
+    transcribing: "转写中",
+    transcribed: "已转写",
+    extracting: "AI 抽取中",
+    extracted: "已抽取",
+    failed: "失败",
+  }[status] || status;
+}
+
 function fileKey(file) {
   return `${file.name}-${file.size}-${file.lastModified}`;
 }
@@ -839,6 +857,259 @@ function DecisionDashboard({ dashboard, loading, refreshing, onRefresh, onCreate
   );
 }
 
+function AerospaceUploadModal({ category, isOpen, onClose, onUploaded }) {
+  const [mode, setMode] = useState("video");
+  const [title, setTitle] = useState("");
+  const [files, setFiles] = useState([]);
+  const [textContent, setTextContent] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState(null);
+  const fileInputRef = useRef(null);
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    function handleKeyDown(event) {
+      if (event.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen, onClose]);
+
+  function addFiles(nextFiles) {
+    const seen = new Set(files.map(fileKey));
+    const merged = [...files];
+    nextFiles.forEach((file) => {
+      if (!seen.has(fileKey(file))) {
+        seen.add(fileKey(file));
+        merged.push(file);
+      }
+    });
+    setFiles(merged);
+  }
+
+  function removeFile(key) {
+    setFiles((current) => current.filter((file) => fileKey(file) !== key));
+  }
+
+  function clearFiles() {
+    setFiles([]);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  async function submitVideo() {
+    if (!files.length) throw new Error("请选择至少一个 mp4 视频");
+    const formData = new FormData();
+    formData.append("category", category);
+    formData.append("title", title);
+    files.forEach((file) => formData.append("videos", file));
+    const result = await api("/api/aerospace/upload", { method: "POST", body: formData });
+    clearFiles();
+    setTitle("");
+    setNotice({ type: "success", text: `已上传 ${result.sources.length} 个视频，正在转写与抽取。` });
+    onUploaded();
+  }
+
+  async function submitText() {
+    if (!textContent.trim()) throw new Error("请粘贴文本内容");
+    const result = await api("/api/aerospace/texts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ category, title, content: textContent }),
+    });
+    if (result.error) throw new Error(result.error);
+    setTextContent("");
+    setTitle("");
+    setNotice({ type: "success", text: "文本已抽取并合并到图谱。" });
+    onUploaded();
+  }
+
+  async function submit(event) {
+    event.preventDefault();
+    setNotice(null);
+    setBusy(true);
+    try {
+      if (mode === "text") await submitText();
+      else await submitVideo();
+    } catch (error) {
+      setNotice({ type: "error", text: error.message });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="modal-backdrop" onMouseDown={onClose}>
+      <section className="upload-modal" role="dialog" aria-modal="true" aria-labelledby="aerospace-upload-title" onMouseDown={(event) => event.stopPropagation()}>
+        <header className="modal-header">
+          <div>
+            <p className="eyebrow">航天图谱资料</p>
+            <h2 id="aerospace-upload-title">上传产业链资料</h2>
+          </div>
+          <button type="button" className="icon-button" aria-label="关闭上传窗口" onClick={onClose}>
+            <X size={18} />
+          </button>
+        </header>
+
+        <div className="modal-tabs" role="tablist" aria-label="资料类型">
+          <button type="button" role="tab" aria-selected={mode === "video"} className={mode === "video" ? "active" : ""} onClick={() => setMode("video")}>
+            <FileVideo size={17} />
+            视频
+          </button>
+          <button type="button" role="tab" aria-selected={mode === "text"} className={mode === "text" ? "active" : ""} onClick={() => setMode("text")}>
+            <ClipboardList size={17} />
+            文本
+          </button>
+        </div>
+
+        <form className="upload-panel" onSubmit={submit}>
+          <label className="field">
+            <span><FileText size={16} /> 标题（可选）</span>
+            <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="如：长征系列火箭产业链" autoComplete="off" />
+          </label>
+
+          <div className="upload-mode-panel">
+            {mode === "video" ? (
+              <>
+                <label className="drop-zone">
+                  <span className="drop-zone-icon"><Upload size={24} /></span>
+                  <strong>{files.length ? `已选择 ${files.length} 个视频` : "选择或拖入 mp4 视频"}</strong>
+                  <small>上传后自动转写并由 AI 抽取零部件、公司与成本结构</small>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="video/*,.mp4"
+                    multiple
+                    onChange={(event) => {
+                      addFiles(Array.from(event.target.files || []));
+                      event.target.value = "";
+                    }}
+                  />
+                </label>
+                {files.length > 0 && (
+                  <section className="selected-files" aria-label="已选择的视频文件">
+                    <header>
+                      <span>{files.length} 个待上传视频</span>
+                      <button type="button" className="text-button" onClick={clearFiles}>
+                        <Trash2 size={15} />
+                        清空
+                      </button>
+                    </header>
+                    <div className="selected-file-list">
+                      {files.map((file) => (
+                        <div className="selected-file" key={fileKey(file)}>
+                          <FileVideo size={16} />
+                          <span>{file.name}</span>
+                          <small>{formatFileSize(file.size)}</small>
+                          <button type="button" aria-label={`移除 ${file.name}`} onClick={() => removeFile(fileKey(file))}>
+                            <X size={15} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                )}
+              </>
+            ) : (
+              <section className="text-source">
+                <label className="field text-content-field">
+                  <span><ClipboardList size={16} /> 文本内容</span>
+                  <textarea value={textContent} onChange={(event) => setTextContent(event.target.value)} placeholder="粘贴航天产业链相关文字：零部件、公司、成本占比、分段说明等" />
+                </label>
+              </section>
+            )}
+          </div>
+
+          {notice && (
+            <div className={`form-notice ${notice.type}`} role="status">
+              {notice.type === "success" && <CheckCircle2 size={18} />}
+              <span>{notice.text}</span>
+            </div>
+          )}
+
+          <footer className="modal-actions">
+            <button className="ghost-button" type="button" onClick={onClose}>取消</button>
+            <button className="submit-button" type="submit" disabled={busy}>
+              {busy ? "处理中…" : "上传并抽取"}
+            </button>
+          </footer>
+        </form>
+      </section>
+    </div>
+  );
+}
+
+function AerospaceSourcePanel({ sources, category, onChanged }) {
+  const [busyId, setBusyId] = useState(null);
+  const [error, setError] = useState(null);
+
+  async function reExtract(source) {
+    setBusyId(source.id);
+    setError(null);
+    try {
+      await api(`/api/aerospace/sources/${source.id}/extract`, { method: "POST" });
+      onChanged();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function removeSource(source) {
+    setBusyId(source.id);
+    setError(null);
+    try {
+      await api(`/api/aerospace/sources/${source.id}`, { method: "DELETE" });
+      onChanged();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  if (!sources.length) {
+    return <div className="aerospace-sources-empty">还没有资料。上传视频或文字后，AI 会自动抽取并合并到图谱。</div>;
+  }
+
+  return (
+    <section className="aerospace-sources" aria-label="航天图谱资料">
+      <header>
+        <h3>资料来源（{sources.length}）</h3>
+        <small>每份资料独立抽取后累加合并；删除资料会从图谱中移除其来源标记</small>
+      </header>
+      {error && <div className="form-notice error" role="status">{error}</div>}
+      <div className="aerospace-source-list">
+        {sources.map((source) => (
+          <div className="aerospace-source" key={source.id}>
+            <div className="aerospace-source-main">
+              {source.source_type === "video" ? <FileVideo size={15} /> : <ClipboardList size={15} />}
+              <span className="aerospace-source-title">{source.title || (source.source_type === "video" ? "视频资料" : "文本资料")}</span>
+              <span className={`aerospace-status aerospace-status-${source.status}`}>{aerospaceStatusText(source.status)}</span>
+              {source.status === "failed" && source.error && <small className="aerospace-error">{source.error}</small>}
+            </div>
+            <div className="aerospace-source-actions">
+              <button type="button" className="text-button" disabled={busyId === source.id} onClick={() => reExtract(source)}>
+                <Sparkles size={14} /> 重抽
+              </button>
+              <button type="button" className="text-button danger" disabled={busyId === source.id} onClick={() => removeSource(source)}>
+                <Trash2 size={14} /> 删除
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function App() {
   const [entries, setEntries] = useState([]);
   const [creators, setCreators] = useState([]);
@@ -852,6 +1123,11 @@ function App() {
   const [dashboardLoading, setDashboardLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [dashboardRefreshing, setDashboardRefreshing] = useState(false);
+  const [aerospaceCategory, setAerospaceCategory] = useState("rocket");
+  const [aerospaceGraph, setAerospaceGraph] = useState(null);
+  const [aerospaceLoading, setAerospaceLoading] = useState(true);
+  const [aerospaceSources, setAerospaceSources] = useState([]);
+  const [aerospaceUploadOpen, setAerospaceUploadOpen] = useState(false);
 
   async function loadCreators() {
     const data = await api("/api/creators");
@@ -897,6 +1173,29 @@ function App() {
     }
   }
 
+  async function loadAerospaceGraph(category, { quiet = false } = {}) {
+    if (!quiet) setAerospaceLoading(true);
+    try {
+      const data = await api(`/api/aerospace/${category}`);
+      setAerospaceGraph(data);
+    } finally {
+      setAerospaceLoading(false);
+    }
+  }
+
+  async function loadAerospaceSources(category) {
+    try {
+      const data = await api(`/api/aerospace/${category}/sources`);
+      setAerospaceSources(data);
+    } catch {
+      setAerospaceSources([]);
+    }
+  }
+
+  async function refreshAerospace({ quiet = true } = {}) {
+    await Promise.all([loadAerospaceGraph(aerospaceCategory, { quiet }), loadAerospaceSources(aerospaceCategory)]);
+  }
+
   useEffect(() => {
     loadEntries();
     loadCreators();
@@ -905,6 +1204,20 @@ function App() {
   useEffect(() => {
     loadDashboard();
   }, []);
+
+  useEffect(() => {
+    loadAerospaceGraph(aerospaceCategory);
+    loadAerospaceSources(aerospaceCategory);
+  }, [aerospaceCategory]);
+
+  useEffect(() => {
+    const processing = aerospaceSources.some((source) => isAerospaceProcessing(source));
+    if (!processing) return undefined;
+    const timer = setInterval(() => {
+      loadAerospaceSources(aerospaceCategory).then(() => loadAerospaceGraph(aerospaceCategory, { quiet: true }));
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [aerospaceSources, aerospaceCategory]);
 
   useEffect(() => {
     if (!navOpen) return undefined;
@@ -1017,7 +1330,27 @@ function App() {
             onOpenArchive={() => switchView("archive")}
           />
         ) : view === "aerospace" ? (
-          <RocketInfographic embedded />
+          <div className="aerospace-view">
+            <AerospaceUploadModal category={aerospaceCategory} isOpen={aerospaceUploadOpen} onClose={() => setAerospaceUploadOpen(false)} onUploaded={() => refreshAerospace()} />
+            <div className="aerospace-toolbar">
+              <button type="button" className="aerospace-create" onClick={() => setAerospaceUploadOpen(true)}>
+                <Upload size={15} /> 上传资料
+              </button>
+            </div>
+            <RocketInfographic
+              embedded
+              category={aerospaceCategory}
+              onCategoryChange={setAerospaceCategory}
+              graph={aerospaceGraph}
+              loading={aerospaceLoading}
+              onUpload={() => setAerospaceUploadOpen(true)}
+            />
+            <AerospaceSourcePanel
+              sources={aerospaceSources}
+              category={aerospaceCategory}
+              onChanged={() => refreshAerospace()}
+            />
+          </div>
         ) : (
           <>
             <Filters date={date} setDate={setDate} query={query} setQuery={setQuery} refresh={() => loadEntries({ quiet: true })} onCreate={() => setUploadOpen(true)} />

@@ -8,7 +8,7 @@ import { createHash } from "node:crypto";
 import { nanoid } from "nanoid";
 import { fileURLToPath } from "node:url";
 import { all, get, initDb, run } from "./db.js";
-import { analyzeDashboard, enqueuePendingVideoProcessing, enqueueVideoProcessing, summarizeEntry } from "./jobs.js";
+import { analyzeDashboard, enqueuePendingVideoProcessing, enqueueVideoProcessing, summarizeEntry, enqueuePendingAerospaceProcessing, enqueueAerospaceVideoProcessing, extractAerospace } from "./jobs.js";
 
 const app = express();
 const port = Number(process.env.PORT || 5174);
@@ -120,6 +120,17 @@ function parseJsonObject(raw) {
     return parsed && typeof parsed === "object" ? parsed : null;
   } catch {
     return null;
+  }
+}
+
+function parseJsonArray(raw) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw;
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
   }
 }
 
@@ -462,6 +473,239 @@ app.delete("/api/entries/:id", async (req, res, next) => {
   }
 });
 
+// ===== 航天图谱：上传 / 抽取 / 展示 / 修正 =====
+
+const aerospaceCategories = ["rocket", "satellite", "satcom", "solar"];
+const aerospaceCategoryLabels = { rocket: "火箭", satellite: "卫星", satcom: "卫星通信", solar: "太空光伏" };
+
+function resolveAerospaceCategory(value) {
+  const category = String(value || "rocket").trim();
+  if (!aerospaceCategories.includes(category)) throw new Error("不支持的航天图谱分类");
+  return category;
+}
+
+const aerospaceStorage = multer.diskStorage({
+  destination: uploadDir,
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname) || ".mp4";
+    cb(null, `${nanoid()}${ext}`);
+  },
+});
+const aerospaceUpload = multer({
+  storage: aerospaceStorage,
+  limits: { fileSize: 1024 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype.startsWith("video/") || file.originalname.toLowerCase().endsWith(".mp4")) cb(null, true);
+    else cb(new Error("只支持视频文件"));
+  },
+});
+
+function parseAerospaceJsonField(raw) {
+  if (raw == null) return null;
+  if (typeof raw === "object") return raw;
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+async function buildAerospaceGraph(category) {
+  const [companies, components, costs, stages] = await Promise.all([
+    all("SELECT * FROM ms_aerospace_companies WHERE category = ? ORDER BY created_at", [category]),
+    all("SELECT * FROM ms_aerospace_components WHERE category = ? ORDER BY created_at", [category]),
+    all("SELECT id, category, name, share, color, sort_order, manual_override, created_at, updated_at FROM ms_aerospace_cost_breakdown WHERE category = ? ORDER BY sort_order, created_at", [category]),
+    all("SELECT * FROM ms_aerospace_stages WHERE category = ? ORDER BY sort_order, created_at", [category]),
+  ]);
+  const links = await all("SELECT component_id, company_id FROM ms_aerospace_company_links WHERE category = ?", [category]);
+
+  const companyIdSet = new Map();
+  companies.forEach((company) => companyIdSet.set(company.id, {
+    ...company,
+    business_mix: parseAerospaceJsonField(company.business_mix) || [],
+    source_ids: parseJsonArray(company.source_ids),
+  }));
+
+  const linksByComponent = new Map();
+  links.forEach((link) => {
+    if (!linksByComponent.has(link.component_id)) linksByComponent.set(link.component_id, []);
+    linksByComponent.get(link.component_id).push(link.company_id);
+  });
+
+  const componentList = components.map((component) => ({
+    ...component,
+    code: component.code || "",
+    art: component.art || "",
+    source_ids: parseJsonArray(component.source_ids),
+    company_ids: linksByComponent.get(component.id) || [],
+  }));
+
+  return {
+    category,
+    label: aerospaceCategoryLabels[category] || category,
+    companies: [...companyIdSet.values()],
+    components: componentList,
+    cost_breakdown: costs.map((cost) => ({ ...cost, share: cost.share == null ? null : Number(cost.share) })),
+    stages,
+  };
+}
+
+app.get("/api/aerospace/:category", async (req, res, next) => {
+  try {
+    const category = resolveAerospaceCategory(req.params.category);
+    res.json(await buildAerospaceGraph(category));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/aerospace/:category/sources", async (req, res, next) => {
+  try {
+    const category = resolveAerospaceCategory(req.params.category);
+    const sources = await all(`
+      SELECT id, category, title, source_type, status, error, created_at, updated_at
+      FROM ms_aerospace_sources
+      WHERE category = ?
+      ORDER BY created_at DESC
+    `, [category]);
+    res.json(sources);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/aerospace/upload", aerospaceUpload.array("videos", 50), async (req, res) => {
+  try {
+    const category = resolveAerospaceCategory(req.body.category);
+    const title = String(req.body.title || "").trim();
+    const files = req.files || [];
+    if (!files.length) throw new Error("请选择至少一个 mp4 视频");
+    const created = [];
+    for (const file of files) {
+      const id = nanoid();
+      const originalName = normalizeOriginalName(file.originalname);
+      await run("INSERT INTO ms_aerospace_sources (id, category, title, source_type, video_path, status) VALUES (?, ?, ?, 'video', ?, 'uploaded')", [id, category, title || originalName, file.path]);
+      enqueueAerospaceVideoProcessing(id);
+      created.push({ id, title: title || originalName });
+    }
+    res.json({ category, sources: created });
+  } catch (error) {
+    res.status(400).json({ error: String(error.message || error) });
+  }
+});
+
+app.post("/api/aerospace/texts", async (req, res) => {
+  try {
+    const category = resolveAerospaceCategory(req.body.category);
+    const content = String(req.body.content || "").trim();
+    if (!content) throw new Error("请粘贴文本内容");
+    const title = String(req.body.title || "").trim() || "手动文本";
+    const id = nanoid();
+    await run("INSERT INTO ms_aerospace_sources (id, category, title, source_type, transcript, status) VALUES (?, ?, ?, 'text', ?, 'uploaded')", [id, category, title, content]);
+    let extraction = null;
+    try {
+      extraction = await extractAerospace(id);
+    } catch (error) {
+      await run("UPDATE ms_aerospace_sources SET status = 'failed', error = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", [String(error.message || error), id]);
+      return res.status(400).json({ error: String(error.message || error), category, source: { id, title } });
+    }
+    res.json({ category, source: { id, title }, extraction });
+  } catch (error) {
+    res.status(400).json({ error: String(error.message || error) });
+  }
+});
+
+app.post("/api/aerospace/sources/:id/extract", async (req, res, next) => {
+  try {
+    const source = await get("SELECT * FROM ms_aerospace_sources WHERE id = ?", [req.params.id]);
+    if (!source) return res.status(404).json({ error: "资料不存在" });
+    if (source.source_type === "video" && (!source.transcript || !source.transcript.trim())) {
+      if (["uploaded", "needs_transcription", "failed"].includes(source.status)) {
+        enqueueAerospaceVideoProcessing(source.id);
+        return res.json({ ok: true, queued: true });
+      }
+      return res.status(409).json({ error: "视频仍在转写中，请稍后再试" });
+    }
+    const extraction = await extractAerospace(source.id);
+    res.json({ ok: true, extraction });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete("/api/aerospace/sources/:id", async (req, res, next) => {
+  try {
+    const source = await get("SELECT * FROM ms_aerospace_sources WHERE id = ?", [req.params.id]);
+    if (!source) return res.status(404).json({ error: "资料不存在" });
+    await run("DELETE FROM ms_aerospace_sources WHERE id = ?", [req.params.id]);
+    await Promise.all([safeUnlink(source.video_path), safeUnlink(source.audio_path)]);
+    // 从被删除资料关联的实体里移除该 source_id（不删除实体本身）
+    await removeFromAerospaceEntities(req.params.id, source.category);
+    res.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+async function removeFromAerospaceEntities(sourceId, category) {
+  // aerospace_company_links 没有 updated_at 列，单独处理
+  const tablesWithUpdatedAt = ["aerospace_companies", "aerospace_components", "aerospace_cost_breakdown", "aerospace_stages"];
+  for (const table of tablesWithUpdatedAt) {
+    const rows = await all(`SELECT id, source_ids FROM ms_${table} WHERE category = ?`, [category]);
+    for (const row of rows) {
+      const ids = parseJsonArray(row.source_ids).filter((id) => id !== sourceId);
+      await run(`UPDATE ms_${table} SET source_ids = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [JSON.stringify(ids), row.id]);
+    }
+  }
+  const linkRows = await all("SELECT id, source_ids FROM ms_aerospace_company_links WHERE category = ?", [category]);
+  for (const row of linkRows) {
+    const ids = parseJsonArray(row.source_ids).filter((id) => id !== sourceId);
+    await run("UPDATE ms_aerospace_company_links SET source_ids = ? WHERE id = ?", [JSON.stringify(ids), row.id]);
+  }
+}
+
+function normalizeBusinessMix(raw) {
+  if (!Array.isArray(raw)) return null;
+  const mix = raw
+    .map((entry) => (Array.isArray(entry) ? [String(entry[0] || "").trim(), Number(entry[1])] : null))
+    .filter((entry) => entry && entry[0] && Number.isFinite(entry[1]) && entry[1] >= 0 && entry[1] <= 100);
+  return mix.length ? mix : null;
+}
+
+app.patch("/api/aerospace/companies/:id", async (req, res, next) => {
+  try {
+    const company = await get("SELECT * FROM ms_aerospace_companies WHERE id = ?", [req.params.id]);
+    if (!company) return res.status(404).json({ error: "公司不存在" });
+    const ticker = req.body.ticker !== undefined ? String(req.body.ticker).trim() : company.ticker;
+    const role = req.body.role !== undefined ? String(req.body.role).trim() : company.role;
+    const businessMix = req.body.business_mix !== undefined ? normalizeBusinessMix(req.body.business_mix) : company.business_mix;
+    await run("UPDATE ms_aerospace_companies SET ticker = ?, role = ?, business_mix = ?, manual_override = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?", [
+      ticker || null, role || null, businessMix ? JSON.stringify(businessMix) : null, req.params.id,
+    ]);
+    res.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.patch("/api/aerospace/components/:id", async (req, res, next) => {
+  try {
+    const component = await get("SELECT * FROM ms_aerospace_components WHERE id = ?", [req.params.id]);
+    if (!component) return res.status(404).json({ error: "零部件不存在" });
+    const code = req.body.code !== undefined ? String(req.body.code).trim() : component.code;
+    const description = req.body.description !== undefined ? String(req.body.description).trim() : component.description;
+    const costShare = req.body.cost_share !== undefined ? String(req.body.cost_share).trim() : component.cost_share;
+    const art = req.body.art !== undefined ? String(req.body.art).trim() : component.art;
+    await run("UPDATE ms_aerospace_components SET code = ?, description = ?, cost_share = ?, art = ?, manual_override = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?", [
+      code || null, description || null, costShare || null, art || null, req.params.id,
+    ]);
+    res.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const distDir = path.resolve(__dirname, "../dist");
 if (fs.existsSync(distDir)) {
@@ -481,6 +725,10 @@ await initDb();
 const resumedVideoCount = await enqueuePendingVideoProcessing();
 if (resumedVideoCount) {
   console.log(`Resumed ${resumedVideoCount} pending video transcription job(s).`);
+}
+const resumedAerospaceCount = await enqueuePendingAerospaceProcessing();
+if (resumedAerospaceCount) {
+  console.log(`Resumed ${resumedAerospaceCount} pending aerospace processing job(s).`);
 }
 
 app.listen(port, () => {
