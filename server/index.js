@@ -4,10 +4,11 @@ import cors from "cors";
 import multer from "multer";
 import fs from "node:fs";
 import path from "node:path";
+import { createHash } from "node:crypto";
 import { nanoid } from "nanoid";
 import { fileURLToPath } from "node:url";
 import { all, get, initDb, run } from "./db.js";
-import { enqueuePendingVideoProcessing, enqueueVideoProcessing, summarizeEntry } from "./jobs.js";
+import { analyzeDashboard, enqueuePendingVideoProcessing, enqueueVideoProcessing, summarizeEntry } from "./jobs.js";
 
 const app = express();
 const port = Number(process.env.PORT || 5174);
@@ -71,6 +72,19 @@ async function findIncompleteVideos(entryId) {
   `, [entryId]);
 }
 
+async function safeUnlink(filePath) {
+  if (!filePath) return;
+  try {
+    await fs.promises.unlink(filePath);
+  } catch (error) {
+    if (error.code !== "ENOENT") console.error(`Failed to delete file ${filePath}:`, error);
+  }
+}
+
+async function resetEntrySummary(entryId) {
+  await run("UPDATE ms_entries SET ai_summary = NULL, key_points = NULL, status = 'collecting', updated_at = CURRENT_TIMESTAMP WHERE id = ?", [entryId]);
+}
+
 async function getEntryDetail(entryId) {
   const entry = await get(`
     SELECT e.*, c.name AS creator_name, c.handle AS creator_handle
@@ -87,8 +101,133 @@ async function getEntryDetail(entryId) {
   };
 }
 
+function parseKeyPoints(raw) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw;
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function daysBetween(dateString, now = new Date()) {
+  const date = new Date(`${dateString}T00:00:00+08:00`);
+  if (Number.isNaN(date.getTime())) return Number.POSITIVE_INFINITY;
+  return Math.floor((now.getTime() - date.getTime()) / (24 * 60 * 60 * 1000));
+}
+
+function buildDecisionHorizon({ key, title, days, intent, items, now }) {
+  const scopedItems = items.filter((item) => daysBetween(item.entry_date, now) <= days);
+  const evidence = scopedItems
+    .flatMap((item) => item.key_points.map((point) => ({
+      point,
+      creator_name: item.creator_name,
+      entry_date: item.entry_date,
+    })))
+    .slice(0, 8);
+  const creators = new Set(scopedItems.map((item) => item.creator_id));
+  return {
+    key,
+    title,
+    days,
+    intent,
+    summary_count: scopedItems.length,
+    creator_count: creators.size,
+    evidence,
+    updated_at: scopedItems[0]?.entry_date || null,
+    basis: scopedItems.length
+      ? `来自近 ${days} 天 ${creators.size} 位博主的 ${scopedItems.length} 张每日观点卡。`
+      : `近 ${days} 天还没有可用于决策的已总结观点卡。`,
+  };
+}
+
+function dashboardSourceSignature(items) {
+  const source = items.map((item) => `${item.id}:${item.entry_date}:${new Date(item.updated_at).toISOString()}`).join("|");
+  return createHash("sha256").update(source).digest("hex");
+}
+
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true });
+});
+
+app.get("/api/dashboard", async (_req, res, next) => {
+  try {
+    const rows = await all(`
+      SELECT e.id, e.creator_id, e.entry_date, e.ai_summary, e.key_points, e.updated_at, c.name AS creator_name
+      FROM ms_entries e
+      JOIN ms_creators c ON c.id = e.creator_id
+      WHERE e.status = 'summarized'
+        AND e.ai_summary IS NOT NULL
+        AND e.ai_summary != ''
+      ORDER BY e.entry_date DESC, e.updated_at DESC
+      LIMIT 240
+    `);
+    const items = rows.map((row) => ({
+      ...row,
+      key_points: parseKeyPoints(row.key_points),
+    }));
+    const now = new Date();
+    const baseHorizons = [
+      buildDecisionHorizon({ key: "short", title: "短期", days: 7, intent: "短期执行", items, now }),
+      buildDecisionHorizon({ key: "mid", title: "中期", days: 30, intent: "中期配置", items, now }),
+      buildDecisionHorizon({ key: "long", title: "长期", days: 90, intent: "长期主线", items, now }),
+    ];
+    const sourceSignature = dashboardSourceSignature(items);
+    const cached = await get("SELECT source_signature, model, analysis, generated_at FROM ms_dashboard_analyses WHERE scope_key = 'default'");
+    let cachedAnalysis = cached?.analysis;
+    if (typeof cachedAnalysis === "string") {
+      try {
+        cachedAnalysis = JSON.parse(cachedAnalysis);
+      } catch {
+        cachedAnalysis = null;
+      }
+    }
+
+    let analysis = cachedAnalysis;
+    let analysisModel = cached?.model || null;
+    let generatedAt = cached?.generated_at || null;
+    if (!cached || cached.source_signature !== sourceSignature) {
+      const generated = await analyzeDashboard(baseHorizons.map((horizon) => ({ ...horizon, items: items.filter((item) => daysBetween(item.entry_date, now) <= horizon.days) })));
+      analysis = generated.analysis;
+      analysisModel = generated.model;
+      generatedAt = new Date().toISOString();
+      await run(`
+        INSERT INTO ms_dashboard_analyses (scope_key, source_signature, model, analysis)
+        VALUES ('default', ?, ?, ?)
+        ON DUPLICATE KEY UPDATE source_signature = VALUES(source_signature), model = VALUES(model), analysis = VALUES(analysis), generated_at = CURRENT_TIMESTAMP
+      `, [sourceSignature, analysisModel, JSON.stringify(analysis)]);
+    }
+
+    const analysisByKey = new Map((analysis?.horizons || []).map((horizon) => [horizon.key, horizon]));
+    const horizons = baseHorizons.map((horizon) => ({
+      ...horizon,
+      ...analysisByKey.get(horizon.key),
+      focus: analysisByKey.get(horizon.key)?.focus || "样本不足，暂不形成独立关注方向。",
+      suggestion: analysisByKey.get(horizon.key)?.suggestion || "补齐更多已总结的每日观点卡后再评估。",
+      cautions: analysisByKey.get(horizon.key)?.cautions || ["当前样本不足，不应据此形成仓位决策。"],
+    }));
+    res.json({
+      generated_at: now.toISOString(),
+      totals: {
+        summary_count: items.length,
+        creator_count: new Set(items.map((item) => item.creator_id)).size,
+        latest_date: items[0]?.entry_date || null,
+      },
+      horizons,
+      analysis: { model: analysisModel, generated_at: generatedAt, source_signature: sourceSignature },
+      recent_entries: items.slice(0, 8).map((item) => ({
+        id: item.id,
+        creator_name: item.creator_name,
+        entry_date: item.entry_date,
+        ai_summary: item.ai_summary,
+        key_points: item.key_points.slice(0, 3),
+      })),
+    });
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.get("/api/creators", async (_req, res, next) => {
@@ -215,6 +354,44 @@ app.post("/api/entries/:id/summarize", async (req, res, next) => {
     }
     const digest = await summarizeEntry(entry.id);
     res.json(digest);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete("/api/videos/:id", async (req, res, next) => {
+  try {
+    const video = await get("SELECT * FROM ms_videos WHERE id = ?", [req.params.id]);
+    if (!video) return res.status(404).json({ error: "视频不存在" });
+    await run("DELETE FROM ms_videos WHERE id = ?", [req.params.id]);
+    await Promise.all([safeUnlink(video.video_path), safeUnlink(video.audio_path)]);
+    await resetEntrySummary(video.entry_id);
+    res.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete("/api/texts/:id", async (req, res, next) => {
+  try {
+    const note = await get("SELECT * FROM ms_text_notes WHERE id = ?", [req.params.id]);
+    if (!note) return res.status(404).json({ error: "文本不存在" });
+    await run("DELETE FROM ms_text_notes WHERE id = ?", [req.params.id]);
+    await resetEntrySummary(note.entry_id);
+    res.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete("/api/entries/:id", async (req, res, next) => {
+  try {
+    const entry = await get("SELECT * FROM ms_entries WHERE id = ?", [req.params.id]);
+    if (!entry) return res.status(404).json({ error: "归档不存在" });
+    const videos = await all("SELECT video_path, audio_path FROM ms_videos WHERE entry_id = ?", [entry.id]);
+    await run("DELETE FROM ms_entries WHERE id = ?", [entry.id]);
+    await Promise.all(videos.flatMap((video) => [safeUnlink(video.video_path), safeUnlink(video.audio_path)]));
+    res.json({ ok: true });
   } catch (error) {
     next(error);
   }

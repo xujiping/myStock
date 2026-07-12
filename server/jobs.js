@@ -213,3 +213,67 @@ async function llmDigest(materials) {
 
   throw userError("未配置 AI 总结模型。请在 .env 中配置 OLLAMA_MODEL，或配置 OPENAI_COMPATIBLE_BASE_URL、OPENAI_COMPATIBLE_API_KEY、OPENAI_COMPATIBLE_MODEL。");
 }
+
+function parseDashboardAnalysis(text) {
+  const cleaned = text.replace(/^```json\s*/i, "").replace(/```$/i, "").trim();
+  const match = cleaned.match(/\{[\s\S]*\}/);
+  const parsed = JSON.parse(match ? match[0] : cleaned);
+  const horizons = Array.isArray(parsed.horizons) ? parsed.horizons : [];
+  return {
+    horizons: horizons.map((item) => ({
+      key: String(item.key || "").trim(),
+      focus: String(item.focus || "").trim(),
+      suggestion: String(item.suggestion || "").trim(),
+      cautions: Array.isArray(item.cautions)
+        ? item.cautions.map((caution) => String(caution).trim()).filter(Boolean).slice(0, 3)
+        : [],
+    })).filter((item) => ["short", "mid", "long"].includes(item.key)),
+  };
+}
+
+function buildDashboardPrompt(horizons) {
+  const sections = horizons.map((horizon) => {
+    const cards = horizon.items.map((item) => [
+      `[${item.entry_date}] ${item.creator_name}`,
+      `总述：${String(item.ai_summary || "").slice(0, 420)}`,
+      `要点：${item.key_points.slice(0, 4).join("；")}`,
+    ].join("\n")).join("\n\n");
+    return `## ${horizon.title}（近 ${horizon.days} 天，${horizon.items.length} 张每日观点卡）\n${cards || "暂无可用观点卡"}`;
+  });
+
+  return [
+    "你是审慎的中国市场投资研究助理。只能基于提供的每日观点卡分析，不得补充事实、预测具体价格、承诺收益或给出个股买卖指令。",
+    "请区分短期、中期、长期：短期强调触发条件和仓位纪律，中期强调配置线索与验证，长期强调结构性主线与持续跟踪。样本重叠或不足时必须明确指出，不能为了差异而编造差异。",
+    "输出简洁、专业、可执行的 JSON，不要 Markdown：",
+    '{"horizons":[{"key":"short","focus":"不超过55字的关注方向","suggestion":"不超过90字的执行建议","cautions":["注意事项1","注意事项2"]},{"key":"mid","focus":"...","suggestion":"...","cautions":["..."]},{"key":"long","focus":"...","suggestion":"...","cautions":["..."]}]}',
+    "每项都应保留核心观点；注意事项应优先覆盖样本不足、验证条件、流动性、波动与风险控制。",
+    "\n以下是已经总结的每日观点卡：\n",
+    sections.join("\n\n"),
+  ].join("\n");
+}
+
+export async function analyzeDashboard(horizons) {
+  if (!process.env.OPENAI_COMPATIBLE_BASE_URL || !process.env.OPENAI_COMPATIBLE_API_KEY) {
+    throw userError("未配置首页投资分析模型。请在 .env 中配置 OPENAI_COMPATIBLE_BASE_URL 与 OPENAI_COMPATIBLE_API_KEY。", 503);
+  }
+
+  const model = process.env.DASHBOARD_MODEL || "deepseek-v4-pro";
+  const response = await fetch(`${process.env.OPENAI_COMPATIBLE_BASE_URL.replace(/\/$/, "")}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${process.env.OPENAI_COMPATIBLE_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model,
+      temperature: 0.2,
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: "你只输出合法 JSON。" },
+        { role: "user", content: buildDashboardPrompt(horizons) },
+      ],
+    }),
+  });
+  if (!response.ok) throw userError(`首页投资分析失败：HTTP ${response.status} ${await response.text()}`, 502);
+  return { model, analysis: parseDashboardAnalysis((await response.json()).choices?.[0]?.message?.content || "") };
+}

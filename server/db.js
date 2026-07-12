@@ -93,6 +93,17 @@ export async function initDb() {
       CONSTRAINT fk_ms_text_notes_entry FOREIGN KEY (entry_id) REFERENCES ${tablePrefix}entries(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=${charset} COLLATE=${charset}_unicode_ci
   `);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS ${tablePrefix}dashboard_analyses (
+      scope_key VARCHAR(32) PRIMARY KEY,
+      source_signature CHAR(64) NOT NULL,
+      model VARCHAR(255) NOT NULL,
+      analysis JSON NOT NULL,
+      generated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=${charset} COLLATE=${charset}_unicode_ci
+  `);
 }
 
 export async function all(sql, params = []) {

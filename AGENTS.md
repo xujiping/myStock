@@ -30,6 +30,10 @@ Database tables must use the project-specific `ms_` prefix. Existing examples: `
 
 Use CSS custom properties from `src/styles.css` for spacing and colors. Avoid one-off hard-coded layout values unless they are component-specific.
 
+## Frontend Design Guidelines
+
+Keep product pages calm, functional, and information-dense. Avoid oversized hero titles, marketing-style hero layouts, gradient backgrounds, purple/blue gradient palettes, glow effects, floating decorative blobs, and other common AI-generated visual patterns. Prefer restrained typography, clear hierarchy, solid surfaces, subtle borders, and layouts optimized for repeated scanning and decision making.
+
 ## Testing Guidelines
 
 Until a test framework is added, verify changes manually:
