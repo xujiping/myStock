@@ -145,12 +145,6 @@ button {
   gap: var(--space-xl);
 }
 
-.workspace.aerospace-workspace {
-  width: 100%;
-  padding: 0;
-  gap: 0;
-}
-
 .eyebrow {
   margin: 0 0 var(--space-sm);
   color: var(--accent);
@@ -1810,32 +1804,4 @@ textarea:focus {
     flex-direction: column;
   }
 }
-
-/* ===== 航天图谱：视图内工具栏 / 资料面板（沿用 rocket 深色主题） ===== */
-.aerospace-view { display: flex; flex-direction: column; }
-
-.aerospace-toolbar { position: sticky; top: 0; z-index: 5; display: flex; justify-content: flex-end; padding: 12px 28px; background: rgba(2, 13, 24, .86); backdrop-filter: blur(6px); border-bottom: 1px solid rgba(152, 195, 224, .18); }
-.aerospace-create { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 14px; border: 1px solid rgba(255, 157, 50, .8); border-radius: 3px; background: rgba(255, 157, 50, .14); color: #ffbd76; font-family: "Noto Sans SC", sans-serif; font-size: 13px; font-weight: 700; cursor: pointer; transition: background .15s; }
-.aerospace-create:hover { background: rgba(255, 157, 50, .26); }
-
-.aerospace-sources { width: min(1200px, 100%); margin: 4px auto 40px; padding: 0 28px; color: #edf5ff; font-family: "Noto Sans SC", sans-serif; }
-.aerospace-sources > header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 16px 0 10px; border-bottom: 1px solid rgba(152, 195, 224, .22); }
-.aerospace-sources h3 { margin: 0; color: #edf5ff; font-size: 15px; font-weight: 800; }
-.aerospace-sources > header small { color: #7694aa; font-size: 11px; }
-
-.aerospace-sources-empty { width: min(1200px, 100%); margin: 0 auto 40px; padding: 26px 28px; color: #7694aa; font-family: "Noto Sans SC", sans-serif; font-size: 13px; text-align: center; }
-
-.aerospace-source-list { display: grid; gap: 8px; padding: 12px 0; }
-.aerospace-source { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; background: rgba(9, 28, 45, .82); border: 1px solid rgba(152, 195, 224, .18); border-radius: 4px; }
-.aerospace-source-main { display: flex; align-items: center; gap: 10px; min-width: 0; color: #a5bed0; font-size: 13px; }
-.aerospace-source-title { color: #edf5ff; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.aerospace-status { flex: none; padding: 2px 8px; border-radius: 10px; background: rgba(152, 195, 224, .14); color: #a5bed0; font-size: 11px; font-weight: 700; }
-.aerospace-status-failed { background: rgba(255, 100, 100, .16); color: #ff9b9b; }
-.aerospace-status-extracted { background: rgba(168, 212, 117, .18); color: #c9e89a; }
-.aerospace-error { color: #ff9b9b; font-size: 11px; }
-.aerospace-source-actions { display: flex; gap: 6px; flex: none; }
-.aerospace-source-actions .text-button { display: inline-flex; align-items: center; gap: 4px; height: 30px; padding: 0 10px; border: 1px solid rgba(152, 195, 224, .22); border-radius: 4px; background: transparent; color: #a5bed0; font-size: 12px; font-weight: 700; cursor: pointer; transition: background .15s, color .15s; }
-.aerospace-source-actions .text-button:hover { background: rgba(152, 195, 224, .12); color: #edf5ff; }
-.aerospace-source-actions .text-button.danger:hover { background: rgba(255, 100, 100, .14); color: #ff9b9b; }
-.aerospace-source-actions .text-button:disabled { opacity: .5; cursor: wait; }
 
