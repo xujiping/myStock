@@ -7,6 +7,7 @@ const videoQueue = [];
 const queuedVideoIds = new Set();
 const activeVideoIds = new Set();
 const videoProcessConcurrency = Math.max(1, Number(process.env.VIDEO_PROCESS_CONCURRENCY || 1) || 1);
+const ffmpegCmd = process.env.FFMPEG_CMD || "ffmpeg";
 
 function userError(message, status = 400) {
   const error = new Error(message);
@@ -32,6 +33,16 @@ function run(command, args) {
       else reject(new Error(stderr || `${command} exited with ${code}`));
     });
   });
+}
+
+async function assertCommandAvailable(command, installHint) {
+  if (path.isAbsolute(command)) {
+    if (fs.existsSync(command)) return;
+    throw userError(`${command} 不存在。${installHint}`, 500);
+  }
+
+  if (await commandExists(command)) return;
+  throw userError(`找不到 ${command} 命令。${installHint}`, 500);
 }
 
 async function commandExists(command) {
@@ -88,7 +99,9 @@ export async function processVideo(videoId) {
     fs.mkdirSync(audioDir, { recursive: true });
     const audioPath = path.join(audioDir, `${video.id}.wav`);
 
-    await run("ffmpeg", [
+    await assertCommandAvailable(ffmpegCmd, "请在服务器安装 ffmpeg，或在 .env 中设置 FFMPEG_CMD=/usr/bin/ffmpeg 后重启服务。");
+
+    await run(ffmpegCmd, [
       "-y",
       "-i",
       video.video_path,
@@ -369,4 +382,3 @@ export async function analyzeDashboard({ horizons, previousDirections, strategyH
   const analyzedHorizons = await Promise.all(horizons.map((horizon) => analyzeHorizon(horizon)));
   return { model, analysis: { horizons: analyzedHorizons } };
 }
-

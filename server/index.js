@@ -123,6 +123,47 @@ function parseJsonObject(raw) {
   }
 }
 
+function parseTags(raw) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw;
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function normalizeIdea(payload = {}) {
+  const title = String(payload.title || "").trim();
+  const thesis = String(payload.thesis || "").trim();
+  if (!title) throw new Error("请填写观点标题");
+  if (!thesis) throw new Error("请填写核心论据");
+  const directions = new Set(["bullish", "bearish", "watch"]);
+  const horizons = new Set(["short", "mid", "long"]);
+  const statuses = new Set(["active", "watching", "archived", "invalidated"]);
+  const conviction = Number(payload.conviction);
+  const tags = Array.isArray(payload.tags)
+    ? payload.tags
+    : String(payload.tags || "").split(/[，,]/);
+  return {
+    title,
+    assetName: String(payload.assetName || "").trim() || null,
+    direction: directions.has(payload.direction) ? payload.direction : "watch",
+    horizon: horizons.has(payload.horizon) ? payload.horizon : "mid",
+    conviction: Number.isInteger(conviction) && conviction >= 1 && conviction <= 5 ? conviction : 3,
+    status: statuses.has(payload.status) ? payload.status : "active",
+    thesis,
+    catalysts: String(payload.catalysts || "").trim() || null,
+    risks: String(payload.risks || "").trim() || null,
+    tags: tags.map((tag) => String(tag).trim()).filter(Boolean).slice(0, 12),
+  };
+}
+
+function serializeIdea(idea) {
+  return { ...idea, tags: parseTags(idea.tags) };
+}
+
 function daysBetween(dateString, now = new Date()) {
   const date = new Date(`${dateString}T00:00:00+08:00`);
   if (Number.isNaN(date.getTime())) return Number.POSITIVE_INFINITY;
@@ -314,6 +355,72 @@ app.get("/api/creators", async (_req, res, next) => {
   }
 });
 
+app.get("/api/ideas", async (req, res, next) => {
+  try {
+    const { status, query } = req.query;
+    const where = [];
+    const params = [];
+    if (status && status !== "all") {
+      where.push("status = ?");
+      params.push(status);
+    }
+    if (query) {
+      const keyword = `%${String(query).trim()}%`;
+      where.push("(title LIKE ? OR asset_name LIKE ? OR thesis LIKE ? OR catalysts LIKE ? OR risks LIKE ?)");
+      params.push(keyword, keyword, keyword, keyword, keyword);
+    }
+    const ideas = await all(`
+      SELECT * FROM ms_investment_ideas
+      ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
+      ORDER BY FIELD(status, 'active', 'watching', 'invalidated', 'archived'), updated_at DESC
+    `, params);
+    res.json(ideas.map(serializeIdea));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/ideas", async (req, res, next) => {
+  try {
+    const idea = normalizeIdea(req.body);
+    const id = nanoid();
+    await run(`
+      INSERT INTO ms_investment_ideas
+        (id, title, asset_name, direction, horizon, conviction, status, thesis, catalysts, risks, tags)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [id, idea.title, idea.assetName, idea.direction, idea.horizon, idea.conviction, idea.status, idea.thesis, idea.catalysts, idea.risks, JSON.stringify(idea.tags)]);
+    res.status(201).json(serializeIdea(await get("SELECT * FROM ms_investment_ideas WHERE id = ?", [id])));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.patch("/api/ideas/:id", async (req, res, next) => {
+  try {
+    const current = await get("SELECT * FROM ms_investment_ideas WHERE id = ?", [req.params.id]);
+    if (!current) return res.status(404).json({ error: "观点不存在" });
+    const idea = normalizeIdea({ ...serializeIdea(current), ...req.body });
+    await run(`
+      UPDATE ms_investment_ideas
+      SET title = ?, asset_name = ?, direction = ?, horizon = ?, conviction = ?, status = ?, thesis = ?, catalysts = ?, risks = ?, tags = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `, [idea.title, idea.assetName, idea.direction, idea.horizon, idea.conviction, idea.status, idea.thesis, idea.catalysts, idea.risks, JSON.stringify(idea.tags), req.params.id]);
+    res.json(serializeIdea(await get("SELECT * FROM ms_investment_ideas WHERE id = ?", [req.params.id])));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete("/api/ideas/:id", async (req, res, next) => {
+  try {
+    const result = await run("DELETE FROM ms_investment_ideas WHERE id = ?", [req.params.id]);
+    if (!result.affectedRows) return res.status(404).json({ error: "观点不存在" });
+    res.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.get("/api/entries", async (req, res, next) => {
   try {
     const { date, creatorId } = req.query;
@@ -400,6 +507,26 @@ app.patch("/api/videos/:id/transcript", async (req, res, next) => {
     if (!video) return res.status(404).json({ error: "视频不存在" });
     await run("UPDATE ms_videos SET transcript = ?, status = 'transcribed', updated_at = CURRENT_TIMESTAMP WHERE id = ?", [String(req.body.transcript || ""), req.params.id]);
     await run("UPDATE ms_entries SET ai_summary = NULL, key_points = NULL, status = 'collecting', updated_at = CURRENT_TIMESTAMP WHERE id = ?", [video.entry_id]);
+    res.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/videos/:id/retry", async (req, res, next) => {
+  try {
+    const video = await get("SELECT * FROM ms_videos WHERE id = ?", [req.params.id]);
+    if (!video) return res.status(404).json({ error: "视频不存在" });
+    if (video.status !== "failed") return res.status(409).json({ error: "只有失败的视频可以重试" });
+    if (!fs.existsSync(video.video_path)) return res.status(410).json({ error: "原视频文件不存在，无法重试" });
+
+    await run(`
+      UPDATE ms_videos
+      SET status = 'uploaded', error = NULL, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `, [req.params.id]);
+    await resetEntrySummary(video.entry_id);
+    enqueueVideoProcessing(req.params.id);
     res.json({ ok: true });
   } catch (error) {
     next(error);

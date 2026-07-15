@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { AlertTriangle, CalendarDays, CheckCircle2, ChevronDown, ClipboardList, Clock3, FileText, FileVideo, Home, Library, Menu, Pencil, RefreshCw, Search, Sparkles, Target, Trash2, TrendingUp, Upload, UserRound, X } from "lucide-react";
+import { AlertTriangle, CalendarDays, CheckCircle2, ChevronDown, ClipboardList, Clock3, FileText, FileVideo, Home, Library, Menu, Pencil, Plus, RefreshCw, Search, Sparkles, Target, Trash2, TrendingUp, Upload, UserRound, X } from "lucide-react";
 import "./styles.css";
 
 const apiBase = import.meta.env.VITE_API_BASE || "http://localhost:5174";
@@ -450,6 +450,7 @@ function EntryCard({ entry, onRefresh, onDelete }) {
   const [transcriptVideo, setTranscriptVideo] = useState(null);
   const [pendingDelete, setPendingDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [retryingVideoId, setRetryingVideoId] = useState("");
 
   async function saveTranscript(videoId) {
     setActionError("");
@@ -482,6 +483,19 @@ function EntryCard({ entry, onRefresh, onDelete }) {
       setActionError(error.message);
     } finally {
       setDeleting(false);
+    }
+  }
+
+  async function retryVideo(videoId) {
+    setActionError("");
+    setRetryingVideoId(videoId);
+    try {
+      await api(`/api/videos/${videoId}/retry`, { method: "POST" });
+      onRefresh(entry.id);
+    } catch (error) {
+      setActionError(error.message);
+    } finally {
+      setRetryingVideoId("");
     }
   }
 
@@ -560,6 +574,8 @@ function EntryCard({ entry, onRefresh, onDelete }) {
           {entry.videos.map((video) => {
             const isTranscribed = video.status === "transcribed";
             const hasTranscript = !!String(video.transcript || "").trim();
+            const canRetry = video.status === "failed";
+            const isRetrying = retryingVideoId === video.id;
             return (
               <div className="video-row" key={video.id}>
                 <div className="video-row-name">
@@ -581,6 +597,17 @@ function EntryCard({ entry, onRefresh, onDelete }) {
                   >
                     {statusText(video.status)}
                   </button>
+                  {canRetry && (
+                    <button
+                      className="icon-button"
+                      title="重新转写"
+                      aria-label={`重新转写 ${video.original_name}`}
+                      disabled={isRetrying}
+                      onClick={() => retryVideo(video.id)}
+                    >
+                      <RefreshCw className={isRetrying ? "spin" : ""} size={15} />
+                    </button>
+                  )}
                   <button
                     className="icon-button danger"
                     title="删除视频"
@@ -838,10 +865,127 @@ function DecisionDashboard({ dashboard, loading, refreshing, onRefresh, onCreate
   );
 }
 
+const ideaDefaults = {
+  title: "",
+  assetName: "",
+  direction: "watch",
+  horizon: "mid",
+  conviction: 3,
+  status: "active",
+  thesis: "",
+  catalysts: "",
+  risks: "",
+  tags: "",
+};
+
+const ideaDirection = { bullish: "看多", bearish: "看空", watch: "观察" };
+const ideaHorizon = { short: "短期", mid: "中期", long: "长期" };
+const ideaStatus = { active: "进行中", watching: "持续观察", archived: "已归档", invalidated: "已证伪" };
+
+function IdeaModal({ idea, onClose, onSaved }) {
+  const isEditing = Boolean(idea?.id);
+  const [draft, setDraft] = useState(isEditing ? { ...idea, tags: (idea.tags || []).join("，") } : ideaDefaults);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = previousOverflow; };
+  }, []);
+
+  function update(field, value) {
+    setDraft((current) => ({ ...current, [field]: value }));
+  }
+
+  async function submit(event) {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      const payload = { ...draft, conviction: Number(draft.conviction) };
+      const saved = await api(isEditing ? `/api/ideas/${idea.id}` : "/api/ideas", {
+        method: isEditing ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      onSaved(saved);
+      onClose();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="modal-backdrop" onMouseDown={onClose}>
+      <section className="idea-modal" role="dialog" aria-modal="true" aria-labelledby="idea-modal-title" onMouseDown={(event) => event.stopPropagation()}>
+        <header className="modal-header">
+          <div>
+            <p className="eyebrow">My Investment Thesis</p>
+            <h2 id="idea-modal-title">{isEditing ? "编辑投资观点" : "记录投资观点"}</h2>
+          </div>
+          <button type="button" className="icon-button" aria-label="关闭" onClick={onClose}><X size={18} /></button>
+        </header>
+        <form className="idea-form" onSubmit={submit}>
+          <div className="idea-form-grid">
+            <label className="field idea-title-field"><span>观点标题</span><input value={draft.title} onChange={(e) => update("title", e.target.value)} placeholder="例如：AI 服务器需求仍在上行" autoFocus /></label>
+            <label className="field"><span>关联标的 / 主题</span><input value={draft.assetName || ""} onChange={(e) => update("assetName", e.target.value)} placeholder="例如：英伟达、算力" /></label>
+            <label className="field"><span>判断方向</span><select value={draft.direction} onChange={(e) => update("direction", e.target.value)}>{Object.entries(ideaDirection).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
+            <label className="field"><span>观察周期</span><select value={draft.horizon} onChange={(e) => update("horizon", e.target.value)}>{Object.entries(ideaHorizon).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
+            <label className="field"><span>当前状态</span><select value={draft.status} onChange={(e) => update("status", e.target.value)}>{Object.entries(ideaStatus).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
+            <label className="field"><span>信心程度 · {draft.conviction}/5</span><input type="range" min="1" max="5" step="1" value={draft.conviction} onChange={(e) => update("conviction", e.target.value)} /></label>
+          </div>
+          <label className="field"><span>核心论据</span><textarea value={draft.thesis} onChange={(e) => update("thesis", e.target.value)} placeholder="为什么形成这个判断？关键假设、事实和推理链是什么？" /></label>
+          <div className="idea-form-grid">
+            <label className="field"><span>催化因素（可选）</span><textarea value={draft.catalysts || ""} onChange={(e) => update("catalysts", e.target.value)} placeholder="哪些事件会验证观点？" /></label>
+            <label className="field"><span>风险与证伪条件（可选）</span><textarea value={draft.risks || ""} onChange={(e) => update("risks", e.target.value)} placeholder="什么情况出现就需要重估？" /></label>
+          </div>
+          <label className="field"><span>标签（用逗号分隔）</span><input value={draft.tags || ""} onChange={(e) => update("tags", e.target.value)} placeholder="宏观，半导体，业绩" /></label>
+          {error && <p className="error-text">{error}</p>}
+          <footer className="modal-actions"><button type="button" className="ghost-button" onClick={onClose}>取消</button><button className="submit-button" disabled={busy}>{busy ? "保存中" : "保存观点"}</button></footer>
+        </form>
+      </section>
+    </div>
+  );
+}
+
+function IdeasBoard({ ideas, loading, refreshing, query, setQuery, status, setStatus, onRefresh, onCreate, onEdit, onDelete }) {
+  const activeCount = ideas.filter((idea) => idea.status === "active").length;
+  return (
+    <section className="ideas-board">
+      <header className="home-hero ideas-hero">
+        <div><p className="eyebrow">Personal Research Log</p><h2>我的投资观点</h2><p>把判断、依据和证伪条件放在一起，方便持续跟踪与复盘。</p></div>
+        <div className="home-actions"><button className="create-button" onClick={onCreate}><Plus size={18} />记录观点</button><button className="ghost-button" onClick={onRefresh}><RefreshCw className={refreshing ? "spin" : ""} size={17} />刷新</button></div>
+      </header>
+      <section className="idea-summary"><div><span>全部观点</span><strong>{ideas.length}</strong></div><div><span>进行中</span><strong>{activeCount}</strong></div><div><span>待复核</span><strong>{ideas.filter((idea) => idea.status === "watching").length}</strong></div></section>
+      <section className="idea-toolbar">
+        <div className="filter-input search"><Search size={17} /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="搜索标题、标的或论据" /></div>
+        <select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="按状态筛选"><option value="all">全部状态</option>{Object.entries(ideaStatus).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select>
+      </section>
+      {loading ? <div className="empty-state">正在读取观点记录...</div> : (
+        <section className="idea-grid">
+          {ideas.map((idea) => <article className="idea-card" key={idea.id}>
+            <header><div><span className={`idea-direction ${idea.direction}`}>{ideaDirection[idea.direction]}</span><p className="eyebrow">{idea.asset_name || "未关联标的"}</p><h3>{idea.title}</h3></div><button className="icon-button" aria-label="编辑观点" onClick={() => onEdit(idea)}><Pencil size={15} /></button></header>
+            <div className="idea-meta"><span>{ideaHorizon[idea.horizon]}</span><span>{ideaStatus[idea.status]}</span><span>信心 {"●".repeat(idea.conviction)}{"○".repeat(5 - idea.conviction)}</span></div>
+            <p className="idea-thesis">{idea.thesis}</p>
+            {idea.catalysts && <section className="idea-detail"><strong>催化</strong><p>{idea.catalysts}</p></section>}
+            {idea.risks && <section className="idea-detail risk"><strong>证伪条件</strong><p>{idea.risks}</p></section>}
+            <footer><div className="idea-tags">{(idea.tags || []).map((tag) => <span key={tag}>#{tag}</span>)}</div><button className="text-button danger-text" onClick={() => onDelete(idea)}>删除</button></footer>
+          </article>)}
+          {!ideas.length && <div className="empty-state">还没有匹配的观点。先记录一个你正在跟踪的判断。</div>}
+        </section>
+      )}
+    </section>
+  );
+}
+
 function App() {
   const [entries, setEntries] = useState([]);
   const [creators, setCreators] = useState([]);
   const [dashboard, setDashboard] = useState(null);
+  const [ideas, setIdeas] = useState([]);
   const [view, setView] = useState("home");
   const [date, setDate] = useState("");
   const [query, setQuery] = useState("");
@@ -851,6 +995,11 @@ function App() {
   const [dashboardLoading, setDashboardLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [dashboardRefreshing, setDashboardRefreshing] = useState(false);
+  const [ideasLoading, setIdeasLoading] = useState(true);
+  const [ideasRefreshing, setIdeasRefreshing] = useState(false);
+  const [ideaQuery, setIdeaQuery] = useState("");
+  const [ideaStatusFilter, setIdeaStatusFilter] = useState("all");
+  const [ideaModal, setIdeaModal] = useState(null);
 
   async function loadCreators() {
     const data = await api("/api/creators");
@@ -896,6 +1045,21 @@ function App() {
     }
   }
 
+  async function loadIdeas({ quiet = false } = {}) {
+    if (quiet) setIdeasRefreshing(true);
+    else setIdeasLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (ideaStatusFilter !== "all") params.set("status", ideaStatusFilter);
+      if (ideaQuery.trim()) params.set("query", ideaQuery.trim());
+      const data = await api(`/api/ideas${params.size ? `?${params}` : ""}`);
+      setIdeas(data);
+    } finally {
+      setIdeasLoading(false);
+      setIdeasRefreshing(false);
+    }
+  }
+
   useEffect(() => {
     loadEntries();
     loadCreators();
@@ -904,6 +1068,11 @@ function App() {
   useEffect(() => {
     loadDashboard();
   }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => { loadIdeas(); }, ideaQuery ? 220 : 0);
+    return () => clearTimeout(timer);
+  }, [ideaStatusFilter, ideaQuery]);
 
   useEffect(() => {
     if (!navOpen) return undefined;
@@ -993,6 +1162,10 @@ function App() {
             <Library size={17} />
             观点归档
           </button>
+          <button className={view === "ideas" ? "active" : ""} onClick={() => switchView("ideas")}>
+            <ClipboardList size={17} />
+            我的观点
+          </button>
         </nav>
       </aside>
 
@@ -1002,6 +1175,7 @@ function App() {
           loadCreators();
           loadDashboard({ quiet: true });
         }} />
+        {ideaModal !== null && <IdeaModal idea={ideaModal || null} onClose={() => setIdeaModal(null)} onSaved={() => loadIdeas({ quiet: true })} />}
         {view === "home" ? (
           <DecisionDashboard
             dashboard={dashboard}
@@ -1010,6 +1184,24 @@ function App() {
             onRefresh={() => loadDashboard({ quiet: true })}
             onCreate={() => setUploadOpen(true)}
             onOpenArchive={() => switchView("archive")}
+          />
+        ) : view === "ideas" ? (
+          <IdeasBoard
+            ideas={ideas}
+            loading={ideasLoading}
+            refreshing={ideasRefreshing}
+            query={ideaQuery}
+            setQuery={setIdeaQuery}
+            status={ideaStatusFilter}
+            setStatus={setIdeaStatusFilter}
+            onRefresh={() => loadIdeas({ quiet: true })}
+            onCreate={() => setIdeaModal({})}
+            onEdit={(idea) => setIdeaModal(idea)}
+            onDelete={async (idea) => {
+              if (!window.confirm(`删除「${idea.title}」？此操作无法恢复。`)) return;
+              await api(`/api/ideas/${idea.id}`, { method: "DELETE" });
+              setIdeas((current) => current.filter((item) => item.id !== idea.id));
+            }}
           />
         ) : (
           <>

@@ -130,6 +130,26 @@ export async function initDb() {
       INDEX idx_ms_direction_revisions_horizon_created (horizon_key, created_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=${charset} COLLATE=${charset}_unicode_ci
   `);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS ${tablePrefix}investment_ideas (
+      id VARCHAR(32) PRIMARY KEY,
+      title VARCHAR(255) NOT NULL,
+      asset_name VARCHAR(255),
+      direction VARCHAR(24) NOT NULL DEFAULT 'watch',
+      horizon VARCHAR(24) NOT NULL DEFAULT 'mid',
+      conviction TINYINT UNSIGNED NOT NULL DEFAULT 3,
+      status VARCHAR(24) NOT NULL DEFAULT 'active',
+      thesis TEXT NOT NULL,
+      catalysts TEXT,
+      risks TEXT,
+      tags JSON,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_ms_investment_ideas_status_updated (status, updated_at),
+      INDEX idx_ms_investment_ideas_asset (asset_name)
+    ) ENGINE=InnoDB DEFAULT CHARSET=${charset} COLLATE=${charset}_unicode_ci
+  `);
 }
 
 export async function all(sql, params = []) {

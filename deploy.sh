@@ -59,6 +59,25 @@ $SSHPASS -p "$REMOTE_PASS" ssh $SSH_OPTS "$REMOTE_USER@$REMOTE_HOST" "
     cd $REMOTE_DIR
     npm install --omit=dev
 
+    # —— 视频抽音频依赖：ffmpeg ——
+    if ! command -v ffmpeg > /dev/null 2>&1; then
+        echo '   未检测到 ffmpeg，开始安装...'
+        if command -v apt-get > /dev/null 2>&1; then
+            apt-get update
+            DEBIAN_FRONTEND=noninteractive apt-get install -y ffmpeg
+        elif command -v yum > /dev/null 2>&1; then
+            yum --disablerepo=docker-ce-stable install -y epel-release || true
+            yum --disablerepo=docker-ce-stable install -y ffmpeg
+        elif command -v dnf > /dev/null 2>&1; then
+            dnf --disablerepo=docker-ce-stable install -y ffmpeg
+        else
+            echo '   ❌ 无法自动安装 ffmpeg：未找到 apt-get/yum/dnf'
+            echo '   请手动安装 ffmpeg，或在 .env 中设置 FFMPEG_CMD 为 ffmpeg 的绝对路径'
+            exit 1
+        fi
+    fi
+    ffmpeg -version | head -n 1
+
     # —— 重启 pm2；如果进程不存在则创建 ——
     if pm2 describe $APP_NAME > /dev/null 2>&1; then
         PORT=$REMOTE_PORT pm2 restart $APP_NAME --update-env
