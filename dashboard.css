@@ -148,6 +148,7 @@
       transition: color 160ms ease, background 160ms ease, transform 160ms ease;
     }
     .nav-button:hover { color: oklch(0.98 0.005 150); background: oklch(0.29 0.03 166); transform: translateX(2px); }
+    .nav-button[href] { text-decoration: none; }
     .nav-button.active { color: oklch(0.98 0.005 150); background: var(--nav-soft); }
     .nav-icon {
       width: 23px;

@@ -28,6 +28,7 @@ const { isTradingDay, nextTradingDayKey, HOLIDAYS_2026 } = require('./scripts/tr
 const { collectQuotes } = require('./scripts/collect-quotes.cjs');
 const {
   buildOverview,
+  buildSectorGraph,
   createDailyAnalysis,
   getVideoResearchLibrary,
   summarizeVideoEvidence,
@@ -666,7 +667,12 @@ function createAppServer(options = {}) {
         return;
       }
 
-      if (pathname === '/api/investment/operation-logs' && req.method === 'GET') {
+      if (pathname === '/api/investment/sector-graph' && req.method === 'GET') {
+        // 板块 × 公司 关系图谱（只读装配：板块池 + 持仓/关注 + 龙头采集 + 行情快照）
+        sendJson(res, 200, buildSectorGraph(store));
+        return;
+      }
+            if (pathname === '/api/investment/operation-logs' && req.method === 'GET') {
         const items = store.listOperationLogs({
           category: requestUrl.searchParams.get('category') || '',
           status: requestUrl.searchParams.get('status') || '',
@@ -1005,7 +1011,11 @@ function createAppServer(options = {}) {
         return;
       }
       // 看板静态资源（CSS/JS），限定在项目根目录下，禁止路径穿越
-      if (pathname === '/dashboard.css' || pathname === '/dashboard.js') {
+      if (pathname === '/sector-graph.html') {
+        sendFile(req, res, path.join(ROOT, 'sector-graph.html'));
+        return;
+      }
+            if (pathname === '/dashboard.css' || pathname === '/dashboard.js' || pathname === '/sector-graph.js') {
         const filePath = safeResolve(ROOT, pathname.slice(1));
         if (!filePath) throw Object.assign(new Error('禁止访问该路径'), { statusCode: 403 });
         sendFile(req, res, filePath);

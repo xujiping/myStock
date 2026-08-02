@@ -137,6 +137,157 @@ function freshnessFor(dateKey, limit) {
   };
 }
 
+/* ---------- 板块 × 公司 关系图谱（只读装配，复用现有库表） ----------
+ * 板块：kai_invest_sector；公司：kai_invest_portfolio（持仓+关注，仅股票）
+ *       与板块采集指标中的龙头；关系：板块龙头/概念龙头（客观采集）+
+ *       买入逻辑文本包含板块名（人工录入归属）；行情：kai_invest_stock_quote。
+ * 本函数只读，不写库；页面上的删除/重置仅存在于浏览器会话内。
+ */
+const SECTOR_GRAPH_COLORS = ['#fbbf24', '#fb7185', '#60a5fa', '#34d399', '#a78bfa', '#22d3ee', '#c084fc', '#7a8aa0'];
+
+function parseSectorIndicators(row) {
+  try {
+    const parsed = JSON.parse(String(row.indicators || '{}'));
+    return {
+      leaders: Array.isArray(parsed.leaders) ? parsed.leaders : [],
+      concepts: Array.isArray(parsed.concepts) ? parsed.concepts : [],
+    };
+  } catch {
+    return { leaders: [], concepts: [] };
+  }
+}
+
+function normalizeStockCode(code) {
+  return String(code || '').toLowerCase().replace(/^(sh|sz|bj)/, '').trim();
+}
+
+function buildSectorGraph(store) {
+  const sectors = store.list('sectors');
+  const portfolio = store.list('portfolio');
+  const quoteRows = store.listQuotes();
+
+  const groups = sectors.map((s, i) => ({
+    id: 's' + s.id,
+    name: String(s.name || '').trim(),
+    color: SECTOR_GRAPH_COLORS[i % SECTOR_GRAPH_COLORS.length],
+    desc: String(s.logic || '').trim() || '暂无投资逻辑说明',
+    rating: s.rating,
+    status: String(s.status || '').trim(),
+    cycle: String(s.cycle || '').trim(),
+    note: String(s.updated_note || '').trim(),
+  }));
+
+  const companies = [];
+  const companyById = new Map();
+  const companyIdByName = new Map();
+  const relations = [];
+  const quotes = {};
+  const quoteByCode = new Map(quoteRows.map((q) => [String(q.stock_code), q]));
+
+  function ensureCompany({ id = '', code = '', name = '', listType = '', note = '' }) {
+    let existing = id ? companyById.get(id) : null;
+    if (!existing && name) existing = companyById.get(companyIdByName.get(name)) || null;
+    if (existing) {
+      if (!existing.code && id) {
+        existing.code = normalizeStockCode(id);
+        companyById.set(existing.id, existing); // 保持原 id 稳定，仅补全代码
+      }
+      if (listType && !existing.listType) existing.listType = listType;
+      if (note && !existing.note) existing.note = note;
+      return existing.id;
+    }
+    const companyId = id || ('n-' + name);
+    const record = { id: companyId, name, code: id ? normalizeStockCode(id) : code, listType, note };
+    companies.push(record);
+    companyById.set(companyId, record);
+    if (name) companyIdByName.set(name, companyId);
+    return companyId;
+  }
+
+  function quoteFor(code) {
+    const q = quoteByCode.get(normalizeStockCode(code));
+    if (!q) return null;
+    return { price: q.price || null, pct: q.change_pct ?? null, ts: q.updated_at || '' };
+  }
+
+  // 持仓 / 关注股票（人工录入），买入逻辑文本包含板块名时建立归属关系
+  for (const item of portfolio) {
+    const code = String(item.stock_code || '').trim();
+    const name = String(item.stock_name || '').trim();
+    if (!code || !name) continue;
+    if (String(item.security_type || '') !== 'stock') continue;
+    if (item.closed_at) continue; // 已清仓不进入图谱
+    if (/ETF|LOF/i.test(name) || /^5\d{5}$/.test(code)) continue; // 基金/ETF 不是“公司”节点
+    const listType = item.list_type === 'holding' ? '持仓' : '关注';
+    const cid = ensureCompany({
+      id: code,
+      code,
+      name,
+      listType,
+      note: String(item.risk_note || '').trim(),
+    });
+    const logic = String(item.buy_logic || '').trim();
+    if (!logic) continue;
+    for (const g of groups) {
+      if (logic.includes(g.name)) {
+        relations.push({
+          companyId: cid,
+          groupId: g.id,
+          type: 'mapping',
+          note: logic.slice(0, 80),
+          source: '人工录入买入逻辑（持仓记录）',
+        });
+      }
+    }
+  }
+
+  // 板块关系：采集指标中的龙头（客观数据）——公司已在上面登记，名字可精确匹配
+  sectors.forEach((s) => {
+    const gid = 's' + s.id;
+    const { leaders, concepts } = parseSectorIndicators(s);
+    for (const lead of leaders) {
+      const code = normalizeStockCode(lead.code);
+      const name = String(lead.name || '').trim();
+      if (!code || !name) continue;
+      const cid = ensureCompany({ id: code, code, name });
+      relations.push({ companyId: cid, groupId: gid, type: 'leader', note: '板块龙头', source: '板块行情采集（collect-sector）' });
+      if (!quotes[cid]) {
+        const q = quoteFor(code);
+        if (q) quotes[cid] = q;
+      }
+    }
+    for (const concept of concepts) {
+      const leaderName = String(concept.leader || '').trim();
+      if (!leaderName) continue;
+      const cid = ensureCompany({ name: leaderName });
+      relations.push({
+        companyId: cid,
+        groupId: gid,
+        type: 'concept',
+        note: '概念「' + String(concept.name || '').trim() + '」龙头',
+        source: '板块行情采集（collect-sector）',
+      });
+    }
+  });
+
+  // 兜底行情装配：所有带代码的公司尝试从行情快照补行情
+  for (const c of companies) {
+    if (!quotes[c.id] && c.code) {
+      const q = quoteFor(c.code);
+      if (q) quotes[c.id] = q;
+    }
+  }
+
+  return {
+    generatedAt: new Date().toISOString(),
+    groups,
+    companies,
+    relations,
+    quotes,
+    note: '数据只读自 kai_invest_sector / kai_invest_portfolio / kai_invest_stock_quote；删除与重置仅在当前页面会话内生效，不写回数据库。',
+  };
+}
+
 function buildOverview(store) {
   const portfolio = store.list('portfolio');
   const holdings = portfolio
@@ -560,6 +711,7 @@ async function createDailyAnalysis(store, options = {}) {
 
 module.exports = {
   buildOverview,
+  buildSectorGraph,
   createDailyAnalysis,
   getVideoResearchLibrary,
   summarizeVideoEvidence,

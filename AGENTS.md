@@ -33,6 +33,7 @@
 - `investment-store.cjs`：SQLite 存取层（含表结构与字段校验）。
 - `investment-analysis.cjs`：看板数据装配（`buildOverview`）。
 - `investment-dashboard.html`：投资看板页面。
+- `sector-graph.html`：板块 × 公司 关系图谱页面（只读展示；数据由 `/api/investment/sector-graph` 实时装配，不写库）。
 - `serve.cjs`：HTTP 服务，实时读库；内置 `scripts/task-scheduler.cjs` 调度每日数据采集 / 行情刷新 / 数据库备份，**不依赖 launchd**（`scripts/install-collect-schedule.cjs`、`install-backup-schedule.cjs` 已废弃；`install-schedule.cjs` 仅用于视频下载分析）。
 - `scripts/`：`collect-macro.cjs` / `collect-market.cjs` / `collect-sector.cjs` / `collect-all.cjs`（行情采集）、`collect-quotes.cjs`（个股行情）、`analyze-market.cjs` / `analyze-sector.cjs`（AI 分析）、`backup-investment.cjs`、`check-investment.cjs`、`restart-dashboard.cjs`、`trading-calendar.cjs`、`task-scheduler.cjs`、`lib/`（网络与解析工具）、`test/`。
 - `stock-fundamentals.cjs`：阿里云计费接口采集持仓股财务指标（见 `docs/api-aliyun-stockhistory.md`）。

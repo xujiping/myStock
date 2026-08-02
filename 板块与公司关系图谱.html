@@ -1,0 +1,1005 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>板块 × 公司 关系图谱 · 多对多关系</title>
+<style>
+:root{
+  --bg:#070b13; --panel:#0d1524; --panel2:#101a2c; --line:#1c2940;
+  --text:#e8eef7; --muted:#8ba0b8; --dim:#5b7089;
+  --teal:#2dd4bf; --violet:#a78bfa; --gold:#fbbf24; --blue:#60a5fa;
+  --purple:#c084fc; --green:#34d399; --rose:#fb7185; --cyan:#22d3ee; --gray:#7a8aa0;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden}
+body{
+  font-family:"PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,-apple-system,sans-serif;
+  background:
+    radial-gradient(1100px 500px at 15% -5%, rgba(45,212,191,.09), transparent 60%),
+    radial-gradient(1100px 600px at 90% 10%, rgba(167,139,250,.08), transparent 60%),
+    linear-gradient(rgba(255,255,255,.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.018) 1px, transparent 1px),
+    var(--bg);
+  background-size:auto,auto,44px 44px,44px 44px,auto;
+  color:var(--text); line-height:1.6;
+  display:flex; flex-direction:column;
+}
+.wrap{flex:1;min-height:0;width:100%;display:flex;flex-direction:column;padding:0 20px}
+
+/* ===== 顶部工具栏（全屏应用头） ===== */
+.toolbar{flex:none;background:rgba(7,11,19,.82);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--line);margin:0 -20px 10px;padding:9px 20px;display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center}
+.app-title{display:flex;align-items:baseline;gap:8px;font-size:17px;font-weight:800;white-space:nowrap}
+.app-title .grad{background:linear-gradient(92deg,var(--teal),var(--blue) 45%,var(--violet));-webkit-background-clip:text;background-clip:text;color:transparent}
+.app-title .sub{font-size:11.5px;color:var(--dim);font-weight:500}
+.stat-row{display:flex;flex-wrap:wrap;gap:6px}
+.stat{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:3px 10px;font-size:11.5px;color:var(--muted)}
+.stat b{font-size:13px;margin-right:4px;font-family:ui-monospace,Menlo,monospace}
+.stat b.cross{color:var(--gold)}
+.tool-right{margin-left:auto;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.search{position:relative}
+.search input{width:170px;background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:9px;
+  padding:6px 10px 6px 30px;font-size:12.5px;outline:none;transition:.2s;font-family:inherit}
+.search input:focus{border-color:rgba(45,212,191,.55);box-shadow:0 0 0 3px rgba(45,212,191,.12)}
+.search::before{content:"⌕";position:absolute;left:11px;top:50%;transform:translateY(-52%);color:var(--dim);font-size:14px}
+.tbtn{border:1px solid var(--line);background:var(--panel);color:var(--muted);font-size:12px;border-radius:999px;padding:5px 12px;cursor:pointer;transition:.18s;font-family:inherit;white-space:nowrap}
+.tbtn:hover{color:var(--text);border-color:#33466b}
+.tbtn.active{background:var(--gold);border-color:var(--gold);color:#0b0f18;font-weight:700}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px}
+.lg{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted);white-space:nowrap;cursor:pointer;border:1px solid transparent;border-radius:999px;padding:2px 9px;transition:.15s}
+.lg:hover{background:rgba(255,255,255,.05)}
+.lg.active{border-color:rgba(251,191,36,.45);background:rgba(251,191,36,.1)}
+.lg.active b{color:var(--gold)}
+.lg i{width:24px;height:0;border-top:3px solid #cbd5e1;display:inline-block}
+.lg i.thin{border-top-width:2px}
+.lg i.dash{border-top-style:dashed;border-top-width:2px}
+.lg i.dot{border-top-style:dotted;border-top-width:2px}
+.lg i.dim{opacity:.55;border-top-style:dotted;border-top-width:1.5px}
+.lg b{color:var(--text);font-weight:600}
+
+/* ===== 主区域：图谱全屏 ===== */
+main{flex:1;min-height:0;display:flex}
+.graph-wrap{flex:1;min-width:0;display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:12px;height:100%}
+.graph-box{position:relative;background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);border-radius:16px;min-height:0;overflow:hidden}
+ .graph-box svg{width:100%;height:100%;display:block}
+.graph-box{cursor:grab}
+#svg.panning{cursor:grabbing}
+.gquote{font-size:8px;font-family:ui-monospace,Menlo,monospace;font-weight:600}
+.gquote.up{fill:#f87171}
+.gquote.down{fill:#34d399}
+.gquote.flat{fill:#5b7089}
+/* 缩放控件 */
+.zctl{position:absolute;right:12px;bottom:12px;z-index:6;display:flex;flex-direction:column;gap:5px;background:rgba(10,17,30,.82);border:1px solid var(--line);border-radius:12px;padding:5px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+.zctl button{width:30px;height:30px;border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:8px;cursor:pointer;font-size:15px;line-height:1;display:flex;align-items:center;justify-content:center;transition:.15s;font-family:inherit}
+.zctl button:hover{color:var(--teal);border-color:#33466b}
+.zctl button:disabled{opacity:.4;cursor:default}
+.zctl .z-pct{font-size:10px;color:var(--muted);text-align:center;font-family:ui-monospace,Menlo,monospace;padding:1px 0}
+.zctl .z-fit{font-size:14px}
+/* svg 元素 */
+.gline{transition:opacity .18s}
+.gnode{cursor:pointer}
+.gnode .gn-body{transition:.15s}
+.gnode:hover .gn-body{filter:brightness(1.4)}
+.gnode text{user-select:none}
+.gnode.dim{opacity:.08}
+.gnode .gname{font-size:10.5px;fill:#9fb4cc;font-weight:600}
+.gnode .gcode{font-size:9px;fill:#5b7089;font-family:ui-monospace,Menlo,monospace}
+.gline.dim{opacity:.03}
+
+/* ===== 详情面板 ===== */
+.detail{position:relative;background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);border-radius:16px;
+  padding:18px 18px 20px;height:100%;overflow:auto}
+.detail h3{font-size:15.5px;font-weight:800;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.detail .d-code{font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--dim);font-weight:500}
+.detail .d-dot{width:10px;height:10px;border-radius:50%;flex:none}
+.detail h4{font-size:11.5px;color:var(--dim);letter-spacing:.12em;margin:15px 0 5px;font-weight:600}
+.detail p{font-size:12.5px;color:var(--muted)}
+.detail .d-desc{font-size:12.5px;color:var(--muted)}
+.rel-list{list-style:none;display:flex;flex-direction:column;gap:7px;margin-top:4px}
+.rel-list li{display:flex;align-items:flex-start;gap:9px;font-size:12px;color:var(--muted)}
+.rel-list li .rel-line{flex:none;width:28px;height:0;border-top:2.5px solid;margin-top:8px}
+.rel-list li b{color:var(--text);font-weight:600}
+.rel-list li small{color:var(--dim);font-size:10.5px;display:block}
+.gtag{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;border:1px solid;border-radius:999px;padding:2px 9px;background:rgba(255,255,255,.03);white-space:nowrap}
+.gtag i{width:13px;height:0;border-top:2.5px solid;display:inline-block}
+.gtag i.thin{border-top-width:2px}
+.gtag i.dash{border-top-style:dashed;border-top-width:2px}
+.gtag i.dot{border-top-style:dotted;border-top-width:2px}
+.d-empty{color:var(--dim);font-size:12.5px}
+.d-note{margin-top:12px;font-size:11.5px;color:#fca5a5;background:rgba(248,113,113,.07);border:1px solid rgba(248,113,113,.2);border-radius:9px;padding:8px 11px}
+.d-tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:9px}
+.d-quote{display:flex;align-items:baseline;gap:9px;margin-top:10px;flex-wrap:wrap}
+.d-quote .q-price{font-size:23px;font-weight:800;font-family:ui-monospace,Menlo,monospace;line-height:1.2}
+.d-quote .q-pct{font-size:13px;font-weight:700;font-family:ui-monospace,Menlo,monospace}
+.d-quote .q-time{font-size:10.5px;color:var(--dim);margin-left:auto;font-family:ui-monospace,Menlo,monospace}
+.d-quote .up{color:#f87171}
+.d-quote .down{color:#34d399}
+.d-quote .flat{color:#7a8aa0}
+#btnRefresh:disabled{opacity:.5;cursor:default}
+.d-source{margin-top:12px;font-size:11px;color:var(--dim)}
+.d-source b{color:var(--muted);font-weight:600}
+/* 详情面板删除按钮 */
+.mini-del{flex:none;margin-left:auto;width:20px;height:20px;border-radius:6px;border:1px solid var(--line);background:transparent;color:var(--dim);cursor:pointer;font-size:10px;line-height:1;display:flex;align-items:center;justify-content:center;transition:.15s}
+.mini-del:hover{color:#fca5a5;border-color:rgba(248,113,113,.5);background:rgba(248,113,113,.1)}
+.del-company{margin-left:auto;border:1px solid rgba(248,113,113,.45);background:rgba(248,113,113,.1);color:#fca5a5;font-size:11px;border-radius:999px;padding:3px 10px;cursor:pointer;font-family:inherit;transition:.15s;white-space:nowrap}
+.del-company:hover{background:rgba(248,113,113,.2)}
+/* 确认弹窗 */
+.confirm-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:18px}
+.confirm-actions .tbtn.danger{background:rgba(248,113,113,.14);border-color:rgba(248,113,113,.5);color:#fca5a5;font-weight:700}
+.confirm-actions .tbtn.danger:hover{background:rgba(248,113,113,.28);color:#fff}
+.confirm-msg{font-size:13px;color:var(--text)}
+.confirm-msg b{color:var(--gold)}
+/* 板块均幅 */
+.g-avg{fill:var(--dim)}
+.g-avg.up{fill:#f87171}
+.g-avg.down{fill:#34d399}
+.g-avg.flat{fill:#5b7089}
+.d-close{display:none;position:absolute;top:10px;right:10px;z-index:5;border:1px solid var(--line);background:var(--panel);color:var(--muted);border-radius:999px;width:28px;height:28px;cursor:pointer;font-size:13px;line-height:1}
+
+/* ===== 帮助弹窗（数据说明 / 风险提示） ===== */
+dialog.help{width:min(700px,94vw);max-height:86vh;padding:0;color:var(--text);background:linear-gradient(180deg,#0d1524,#101a2c);
+  border:1px solid #2b3d5e;border-radius:16px;overflow:hidden;box-shadow:0 24px 70px rgba(0,0,0,.6)}
+dialog.help::backdrop{background:rgba(4,8,14,.74);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.help-head{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--line);background:#0d1524;position:sticky;top:0}
+.help-head h3{font-size:15px;font-weight:800}
+.help-close{border:1px solid var(--line);background:var(--panel);color:var(--muted);border-radius:999px;width:30px;height:30px;cursor:pointer;font-size:13px}
+.help-close:hover{color:var(--text);border-color:#33466b}
+.help-inner{padding:18px 20px 22px;overflow:auto;max-height:calc(86vh - 59px)}
+.help h4{font-size:12px;color:var(--dim);letter-spacing:.1em;margin:16px 0 6px;font-weight:700}
+.help p{font-size:12.5px;color:var(--muted)}
+.help p b{color:var(--text)}
+.help ol{margin:8px 0 0 19px;font-size:12.5px;color:var(--muted);display:flex;flex-direction:column;gap:4px}
+.help ol b{color:var(--text)}
+.help pre{background:#0a1120;border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:11px;line-height:1.6;color:#9fb4cc;overflow:auto;margin-top:10px;font-family:ui-monospace,Menlo,monospace}
+.help pre b{color:var(--teal)}
+.risk-txt{margin-top:8px;color:#fca5a5 !important;background:rgba(248,113,113,.06);border:1px solid rgba(248,113,113,.22);border-radius:10px;padding:10px 12px}
+.foot-note{margin-top:14px;font-size:11px;color:var(--dim)}
+
+/* ===== 响应式 ===== */
+@media (max-width:1020px){
+  .graph-wrap{grid-template-columns:1fr;position:relative}
+  .detail{position:absolute;right:10px;top:10px;bottom:10px;width:min(330px,88%);height:auto;z-index:40;display:none;
+    box-shadow:0 18px 50px rgba(0,0,0,.6)}
+  .detail.open{display:block}
+  .d-close{display:block}
+}
+@media (max-width:640px){
+  .wrap{padding:0 12px}
+  .toolbar{margin:0 -12px 8px;padding:8px 12px}
+  .search{flex:1;min-width:150px}
+  .search input{width:100%}
+  .app-title .sub{display:none}
+}
+</style></style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="toolbar">
+  <div class="app-title">板块 <span class="grad">×</span> 公司 关系图谱<span class="sub">多对多 · 自定义板块</span></div>
+  <div class="stat-row" id="stats"></div>
+  <div class="tool-right">
+    <div class="search"><input id="searchInput" placeholder="搜索公司 / 代码…" autocomplete="off"></div>
+    <button class="tbtn" id="btnCross">⊕ 只看跨板块</button>
+    <button class="tbtn reset" id="btnReset">✕ 重置</button>
+    <button class="tbtn" id="btnHelp">ⓘ 数据说明</button>
+    <span class="stat" id="quoteStatus"><b>行情</b>加载中…</span>
+    <button class="tbtn" id="btnRefresh" title="重新获取行情">⟳ 刷新</button>
+  </div>
+  <div class="legend" id="legendRel"></div>
+</div>
+
+<main>
+  <div class="graph-wrap">
+    <div class="graph-box">
+      <svg id="svg" viewBox="0 0 1200 1000" role="img" aria-label="板块与公司多对多关系图"></svg>
+      <div class="zctl" id="zoomCtl">
+        <button id="btnZoomIn" title="放大">＋</button>
+        <button id="btnZoomOut" title="缩小">－</button>
+        <button id="btnZoomFit" class="z-fit" title="重置视图">⟲</button>
+        <span class="z-pct" id="zoomPct">100%</span>
+      </div>
+    </div>
+    <aside class="detail" id="detail"></aside>
+  </div>
+</main>
+
+</div>
+
+<dialog id="helpDialog" class="help">
+  <div class="help-head"><h3>📐 数据与使用说明</h3><button class="help-close" id="btnHelpClose" aria-label="关闭">✕</button></div>
+  <div class="help-inner">
+    <h4>如何使用</h4>
+    <p><b>悬停</b>公司/板块节点高亮关联线 · <b>点击</b>查看右侧详情 · <b>拖动</b>公司节点可整理布局 · <b>滚轮</b>缩放图谱、<b>空白处拖动</b>平移 · 搜索可按名称/代码过滤。</p>
+    <h4>编辑与筛选</h4>
+    <p>详情面板提供<b>删除个股</b>与<b>删除单条关系</b>（带确认弹窗）；删除后统计与板块均幅即时重算，点右上角「✕ 重置」可恢复本次会话删除的数据（不会重置拖拽整理的位置）。</p>
+    <p>图例区可点击<b>关系类型</b>筛选：支持多选，只看选中类型的关系线，无关节点自动淡化；点「全部」恢复。</p>
+    <h4>板块涨跌幅（均幅）</h4>
+    <p>板块节点第二行显示<b>均幅</b> = 该板块当前关联个股涨跌幅的简单平均（自动剔除已删除公司与无行情个股），红涨绿跌；无可用行情时显示「—」。</p>
+    <h4>如何自定义板块与公司（数据与展示分离）</h4>
+    <p>数据全部来自文件顶部的 <b>DATA</b> 常量，共三张表：<b>groups（板块）</b>、<b>companies（公司）</b>、<b>relations（关系）</b>。
+    关系以「companyId + groupId + type」描述，一个公司出现多条 relations 即为跨板块。修改后刷新页面即可生效，无需改渲染逻辑。</p>
+    <ol>
+      <li><b>加板块：</b>在 <b>groups</b> 里加一条（id 唯一、给一个 color）；</li>
+      <li><b>加公司：</b>在 <b>companies</b> 里加一条（id 唯一、名称、代码、可选备注与来源）；</li>
+      <li><b>建立关系：</b>在 <b>relations</b> 里加一条，type 从 <b>official / invest / report / mapping</b> 中选，分别对应 实线 / 粗实线 / 虚线 / 点线。</li>
+    </ol>
+    <pre><b>DATA</b> = {
+  groups:    [ { id:'g1', name:'智谱AI', color:'#2dd4bf', desc:'…' } ],
+  companies: [ { id:'huace', name:'华策影视', code:'300133', note:'…' } ],
+  relations: [ { companyId:'huace', groupId:'g1', type:'invest', note:'间接入股', source:'澎湃等' } ]
+}</pre>
+    <h4>行情数据（最新价 / 今日涨跌幅）</h4>
+    <p>行情优先来自<b>腾讯行情公开接口</b>（本地 file:// 打开也可用），失败时自动切换<b>东方财富</b>兜底；页面打开时自动获取，也可点右上角「⟳ 刷新」手动更新。
+    代码自动识别：<b>6</b> 开头为沪市、其余为深市/北交所、<b>00354.HK</b> 为港股。涨跌幅按 A 股习惯<b>红涨绿跌</b>；
+    休市时显示最近交易日收盘数据；停牌或无行情的公司显示 <b>—</b>。行情仅供演示参考，不构成投资建议。</p>
+    <h4>⚠ 风险提示</h4>
+    <p class="risk-txt">示例数据为 2026-08-02 公开信息整理（沿用「AI概念关系图谱」页来源），仅用于演示页面设计，不构成投资建议。
+    持股比例口径存在差异，投资前务必以公司公告和定期报告为准；题材股短期波动剧烈，请独立判断。</p>
+    <p class="foot-note">页面为本地静态文件 · 数据可自行编辑 · 若将来建库建表，本项目的表建议统一使用「tz_」前缀</p>
+  </div>
+</dialog>
+
+<dialog id="confirmDialog" class="help">
+  <div class="help-head"><h3 id="confirmTitle">确认操作</h3><button class="help-close" id="confirmCancel" aria-label="取消">✕</button></div>
+  <div class="help-inner">
+    <p class="confirm-msg" id="confirmMsg"></p>
+    <div class="confirm-actions">
+      <button class="tbtn danger" id="confirmOk">确认删除</button>
+      <button class="tbtn" id="confirmCancel2">取消</button>
+    </div>
+  </div>
+</dialog>
+
+<script>
+/* ============================================================
+ * 数据区：用户自定义板块、公司、关系（改这里即可，无需动渲染代码）
+ * 关系 type：official 官方公告 · invest 参股/投资 · report 公开报道/市场梳理
+ *           · mapping 概念映射/API接入
+ * ============================================================ */
+const DATA = {
+  groups: [
+    { id:'g-zhihu',  name:'智谱AI',       desc:'02513.HK 智谱华章 · 回A推进中', color:'#2dd4bf' },
+    { id:'g-kimi',   name:'Kimi/月之暗面', desc:'K3 发布 · 港股IPO筹备中',       color:'#a78bfa' },
+    { id:'g-calc',   name:'算力/IDC',     desc:'训练推理算力与基础设施',         color:'#c084fc' },
+    { id:'g-office', name:'AI办公应用',   desc:'办公/ERP/阅读场景落地',          color:'#60a5fa' },
+    { id:'g-media',  name:'AI传媒/营销',  desc:'影视、内容与营销生成',           color:'#fbbf24' },
+    { id:'g-robot',  name:'具身智能/机器人', desc:'人形机器人与智能制造',         color:'#34d399' },
+    { id:'g-sec',    name:'AI安全',       desc:'大模型与安全生态',               color:'#fb7185' },
+    { id:'g-fund',   name:'AI创投/基金',  desc:'直接或经基金入股大模型公司',      color:'#22d3ee' }
+  ],
+  companies: [
+    { id:'dianmei',     name:'电广传媒',   code:'000917',  risk:false, note:'经控股达晨财智间接持股；口径有差异' },
+    { id:'sanqi',       name:'三七互娱',   code:'002555',  risk:false, note:'基金增资间接持股+直接参投，横跨两大概念' },
+    { id:'huace',       name:'华策影视',   code:'300133',  risk:false, note:'专项基金入股智谱，同时为 Kimi 战略伙伴' },
+    { id:'lingyunguang',name:'凌云光',     code:'688400',  risk:false, note:'直接持股约1.02%，联合机器人公司' },
+    { id:'zhouming',    name:'洲明科技',   code:'300232',  risk:false, note:'智谱IPO锚定投资，合资「智显机器人」' },
+    { id:'tuosida',     name:'拓斯达',     code:'300607',  risk:false, note:'合资「矩阵智拓」，人形机器人「小拓」' },
+    { id:'jinshan',     name:'金山办公',   code:'688111',  risk:false, note:'WPS灵犀深度接入GLM-5，同时多模型路由' },
+    { id:'360',         name:'三六零',     code:'601360',  risk:false, note:'与智谱共研360GLM' },
+    { id:'doushen',     name:'豆神教育',   code:'300010',  risk:false, note:'合资AI教育产品，未持股' },
+    { id:'lanse',       name:'蓝色光标',   code:'300058',  risk:false, note:'智谱生态伙伴API+分成，营销多模型调用' },
+    { id:'donghua',     name:'东华软件',   code:'002065',  risk:false, note:'企业管理AI应用合作' },
+    { id:'yaxin',       name:'亚信安全',   code:'688225',  risk:false, note:'AI+安全战略合作' },
+    { id:'shoudu',      name:'首都在线',   code:'300846',  risk:false, note:'智谱联合方案+算力服务' },
+    { id:'muxi',        name:'沐曦股份',   code:'688802',  risk:false, note:'算力适配/供应' },
+    { id:'zhongkeshu',  name:'中科曙光',   code:'603019',  risk:false, note:'算力基础设施' },
+    { id:'haiguang',    name:'海光信息',   code:'688041',  risk:false, note:'算力适配' },
+    { id:'bingxing',    name:'并行科技',   code:'839493',  risk:false, note:'算力服务商' },
+    { id:'jiuan',       name:'九安医疗',   code:'002432',  risk:false, note:'直接+基金投资，横跨 Kimi/DeepSeek' },
+    { id:'shenxinfu',   name:'深信服',     code:'300454',  risk:false, note:'基金间接投资月之暗面' },
+    { id:'tangcheng',   name:'汤臣倍健',   code:'300146',  risk:false, note:'D轮追加认购' },
+    { id:'miaohui',     name:'米奥会展',   code:'300795',  risk:false, note:'基金间接持股' },
+    { id:'yuxin',       name:'宇信科技',   code:'300674',  risk:false, note:'间接参投' },
+    { id:'zhangyue',    name:'掌阅科技',   code:'603533',  risk:false, note:'官方确认接入 Kimi API' },
+    { id:'hande',       name:'汉得信息',   code:'300170',  risk:false, note:'互动平台确认开启 AIGC 对接测试' },
+    { id:'yinsai',      name:'因赛集团',   code:'300781',  risk:false, note:'多模型调用之一' },
+    { id:'zhewen',      name:'浙文互联',   code:'600986',  risk:false, note:'营销AI工具调用Kimi' },
+    { id:'haitian',     name:'海天瑞声',   code:'688787',  risk:false, note:'Kimi数据训练服务（2024年报道）' },
+    { id:'yakang',      name:'亚康股份',   code:'301085',  risk:false, note:'训练推理加速+集群运维' },
+    { id:'runze',       name:'润泽科技',   code:'300442',  risk:false, note:'核心智算IDC服务商' },
+    { id:'langchao',    name:'浪潮信息',   code:'000977',  risk:false, note:'AI服务器千卡级底座' },
+    { id:'zhongruan',   name:'中软国际',   code:'00354.HK',risk:false, note:'「登月计划」Token分成+联合创新' },
+  ],
+  relations: [
+    /* ---------- 智谱AI ---------- */
+    { companyId:'dianmei',      groupId:'g-zhihu', type:'invest',  note:'经达晨财智间接持股',            source:'澎湃等' },
+    { companyId:'sanqi',        groupId:'g-zhihu', type:'invest',  note:'基金增资间接持股',              source:'澎湃等' },
+    { companyId:'huace',        groupId:'g-zhihu', type:'invest',  note:'盐城智华专项基金间接入股',      source:'澎湃等' },
+    { companyId:'lingyunguang', groupId:'g-zhihu', type:'invest',  note:'直接持股约1.02%',              source:'公开梳理' },
+    { companyId:'zhouming',     groupId:'g-zhihu', type:'invest',  note:'IPO锚定投资',                  source:'证券时报' },
+    { companyId:'tuosida',      groupId:'g-zhihu', type:'official',note:'合资「矩阵智拓」',             source:'中证报' },
+    { companyId:'jinshan',      groupId:'g-zhihu', type:'official',note:'WPS灵犀深度接入GLM-5',         source:'凤凰科技' },
+    { companyId:'360',          groupId:'g-zhihu', type:'official',note:'共研360GLM',                  source:'公司公告' },
+    { companyId:'doushen',      groupId:'g-zhihu', type:'official',note:'合资AI教育产品',               source:'证券日报网' },
+    { companyId:'lanse',        groupId:'g-zhihu', type:'report',  note:'生态伙伴API+分成',             source:'公开报道' },
+    { companyId:'donghua',      groupId:'g-zhihu', type:'report',  note:'企业管理AI应用合作',           source:'2023年报' },
+    { companyId:'yaxin',        groupId:'g-zhihu', type:'report',  note:'AI+安全战略合作',              source:'公开报道' },
+    { companyId:'shoudu',       groupId:'g-zhihu', type:'report',  note:'联合方案+算力服务',            source:'证券日报' },
+    { companyId:'muxi',         groupId:'g-zhihu', type:'report',  note:'算力适配',                     source:'证券之星' },
+    { companyId:'zhongkeshu',   groupId:'g-zhihu', type:'report',  note:'算力基础设施',                 source:'市场梳理' },
+    { companyId:'haiguang',     groupId:'g-zhihu', type:'report',  note:'算力适配',                     source:'市场梳理' },
+    { companyId:'bingxing',     groupId:'g-zhihu', type:'report',  note:'算力服务商',                   source:'市场梳理' },
+    /* ---------- Kimi/月之暗面 ---------- */
+    { companyId:'jiuan',        groupId:'g-kimi', type:'invest',  note:'直接+基金投资',                source:'东方财富' },
+    { companyId:'shenxinfu',    groupId:'g-kimi', type:'invest',  note:'基金间接投资',                 source:'中国金融信息网' },
+    { companyId:'sanqi',        groupId:'g-kimi', type:'invest',  note:'直接投资',                     source:'公开梳理' },
+    { companyId:'tangcheng',    groupId:'g-kimi', type:'invest',  note:'D轮认购',                      source:'凤凰周刊' },
+    { companyId:'miaohui',      groupId:'g-kimi', type:'invest',  note:'基金间接持股',                 source:'公开梳理' },
+    { companyId:'yuxin',        groupId:'g-kimi', type:'invest',  note:'间接参投',                     source:'公开梳理' },
+    { companyId:'zhangyue',     groupId:'g-kimi', type:'official',note:'官方确认接入API',              source:'财联社' },
+    { companyId:'zhongruan',    groupId:'g-kimi', type:'official',note:'Token分成+联合创新实验室',     source:'南方财经' },
+    { companyId:'huace',        groupId:'g-kimi', type:'report',  note:'战略合作伙伴',                 source:'公开报道' },
+    { companyId:'hande',        groupId:'g-kimi', type:'report',  note:'AIGC平台对接测试',             source:'互动平台' },
+    { companyId:'haitian',      groupId:'g-kimi', type:'report',  note:'数据训练服务',                 source:'2024年报道' },
+    { companyId:'yakang',       groupId:'g-kimi', type:'report',  note:'训练推理加速+集群运维',        source:'市场梳理' },
+    { companyId:'runze',        groupId:'g-kimi', type:'report',  note:'核心智算IDC',                  source:'市场梳理' },
+    { companyId:'langchao',     groupId:'g-kimi', type:'report',  note:'AI服务器千卡级底座',           source:'市场梳理' },
+    { companyId:'lanse',        groupId:'g-kimi', type:'mapping', note:'闭源大模型之一',               source:'公开报道' },
+    { companyId:'jinshan',      groupId:'g-kimi', type:'mapping', note:'多模型路由之一',               source:'公开报道' },
+    { companyId:'yinsai',       groupId:'g-kimi', type:'mapping', note:'调用大模型之一',               source:'公司回应' },
+    { companyId:'zhewen',       groupId:'g-kimi', type:'mapping', note:'营销AI工具调用',               source:'公开报道' },
+    /* ---------- 算力/IDC ---------- */
+    { companyId:'shoudu',       groupId:'g-calc', type:'report',  note:'算力服务',                     source:'证券日报' },
+    { companyId:'muxi',         groupId:'g-calc', type:'report',  note:'算力供应',                     source:'证券之星' },
+    { companyId:'zhongkeshu',   groupId:'g-calc', type:'report',  note:'算力基础设施',                 source:'市场梳理' },
+    { companyId:'haiguang',     groupId:'g-calc', type:'report',  note:'算力适配',                     source:'市场梳理' },
+    { companyId:'bingxing',     groupId:'g-calc', type:'report',  note:'算力服务',                     source:'市场梳理' },
+    { companyId:'yakang',       groupId:'g-calc', type:'report',  note:'服务器供货+集群运维',          source:'市场梳理' },
+    { companyId:'runze',        groupId:'g-calc', type:'report',  note:'智算IDC',                      source:'市场梳理' },
+    { companyId:'langchao',     groupId:'g-calc', type:'report',  note:'AI服务器',                     source:'市场梳理' },
+    /* ---------- AI办公应用 ---------- */
+    { companyId:'jinshan',      groupId:'g-office', type:'official', note:'WPS灵犀深度集成',           source:'凤凰科技' },
+    { companyId:'zhangyue',     groupId:'g-office', type:'mapping',  note:'阅读应用接入',              source:'财联社' },
+    { companyId:'hande',        groupId:'g-office', type:'report',   note:'ERP场景接入测试',           source:'互动平台' },
+    /* ---------- AI传媒/营销 ---------- */
+    { companyId:'huace',        groupId:'g-media', type:'report',  note:'AI影视内容应用',              source:'公开报道' },
+    { companyId:'lanse',        groupId:'g-media', type:'report',  note:'AI营销内容生成',              source:'公开报道' },
+    { companyId:'yinsai',       groupId:'g-media', type:'mapping', note:'AI营销生成',                  source:'公司回应' },
+    { companyId:'zhewen',       groupId:'g-media', type:'mapping', note:'营销内容优化',                source:'公开报道' },
+    /* ---------- 具身智能/机器人 ---------- */
+    { companyId:'tuosida',      groupId:'g-robot', type:'official', note:'合资公司+人形机器人「小拓」', source:'中证报' },
+    { companyId:'lingyunguang', groupId:'g-robot', type:'report',   note:'联合成立机器人公司',          source:'公开梳理' },
+    { companyId:'zhouming',     groupId:'g-robot', type:'report',   note:'合资「智显机器人」',          source:'证券时报' },
+    /* ---------- AI安全 ---------- */
+    { companyId:'360',          groupId:'g-sec', type:'official', note:'360GLM+安全生态',              source:'公司公告' },
+    { companyId:'yaxin',        groupId:'g-sec', type:'report',   note:'AI+安全行业方案',              source:'公开报道' },
+    /* ---------- AI创投/基金 ---------- */
+    { companyId:'dianmei',      groupId:'g-fund', type:'invest',  note:'达晨财智创投',                 source:'澎湃等' },
+    { companyId:'sanqi',        groupId:'g-fund', type:'invest',  note:'产业基金投资',                 source:'澎湃等' },
+    { companyId:'huace',        groupId:'g-fund', type:'invest',  note:'盐城智华专项基金',             source:'澎湃等' },
+    { companyId:'jiuan',        groupId:'g-fund', type:'invest',  note:'基金直投',                     source:'东方财富' },
+    { companyId:'shenxinfu',    groupId:'g-fund', type:'invest',  note:'基金间接投资',                 source:'中国金融信息网' },
+    { companyId:'tangcheng',    groupId:'g-fund', type:'invest',  note:'D轮认购',                      source:'凤凰周刊' },
+    { companyId:'miaohui',      groupId:'g-fund', type:'invest',  note:'基金间接持股',                 source:'公开梳理' },
+    { companyId:'yuxin',        groupId:'g-fund', type:'invest',  note:'间接参投',                     source:'公开梳理' },
+  ]
+};
+</script>
+
+<script>
+/* ================= 渲染与交互 ================= */
+const REL = {
+  official:{ label:'官方公告', dash:null,         w:2.6 },
+  invest:  { label:'参股/投资', dash:null,         w:4.2 },
+  report:  { label:'公开报道', dash:'9 6',         w:2.0 },
+  mapping: { label:'概念映射', dash:'2 6',         w:1.8 },
+
+};
+const relDashCls = t => t==='report'?'dash':(t==='mapping')?'dot':'';
+const relThin = t => t!=='invest' && t!=='official';
+
+const W=1200, H=1000, CX=600, CY=500, R=430, R_IN=330;
+const groups = DATA.groups, companies = DATA.companies, relations = DATA.relations;
+const gMap = {}, cMap = {};
+groups.forEach(g => gMap[g.id]=g);
+companies.forEach(c => cMap[c.id]=c);
+const relsOf = {};            // companyId -> [rel]
+relations.forEach(r => { (relsOf[r.companyId] = relsOf[r.companyId]||[]).push(r); });
+const relsOfGroup = {};       // groupId -> [rel]
+relations.forEach(r => { (relsOfGroup[r.groupId] = relsOfGroup[r.groupId]||[]).push(r); });
+const state = { hover:null, selected:null, search:'', crossOnly:false, suppressClick:false,
+  removedCompanies:new Set(), removedRels:new Set(), relFilter:new Set() };
+function relKey(r){ return r.companyId+'|'+r.groupId; }
+function activeRelations(){
+  return relations.filter(r=>!state.removedRels.has(relKey(r)) && !state.removedCompanies.has(r.companyId));
+}
+function activeCompanies(){ return companies.filter(c=>!state.removedCompanies.has(c.id)); }
+function recomputeData(){
+  Object.keys(relsOf).forEach(k=>delete relsOf[k]);
+  Object.keys(relsOfGroup).forEach(k=>delete relsOfGroup[k]);
+  activeRelations().forEach(r=>{
+    (relsOf[r.companyId]=relsOf[r.companyId]||[]).push(r);
+    (relsOfGroup[r.groupId]=relsOfGroup[r.groupId]||[]).push(r);
+  });
+}
+
+/* ---------- 视图状态：缩放 / 平移 ---------- */
+const svgEl=document.getElementById('svg');
+const view={ k:1, tx:0, ty:0 };
+const VIEW_MIN=0.3, VIEW_MAX=5;
+function svgPoint(e){
+  const pt=svgEl.createSVGPoint(); pt.x=e.clientX; pt.y=e.clientY;
+  return pt.matrixTransform(svgEl.getScreenCTM().inverse());
+}
+function applyViewport(){
+  const vp=document.getElementById('viewport');
+  if(vp) vp.setAttribute('transform','translate('+view.tx.toFixed(2)+' '+view.ty.toFixed(2)+') scale('+view.k+')');
+  const pct=document.getElementById('zoomPct');
+  if(pct) pct.textContent=Math.round(view.k*100)+'%';
+}
+function zoomAt(sx,sy,f){
+  const nk=Math.min(VIEW_MAX,Math.max(VIEW_MIN,view.k*f));
+  const r=nk/view.k;
+  view.tx=sx-(sx-view.tx)*r; view.ty=sy-(sy-view.ty)*r; view.k=nk;
+  applyViewport();
+}
+function resetView(){ view.k=1; view.tx=0; view.ty=0; applyViewport(); }
+
+/* ---------- 布局：分组固定圆周，公司力导向聚簇 ---------- */
+const gPos = {};
+groups.forEach((g,i) => {
+  const a = -Math.PI/2 + (i + 0.5) * (2*Math.PI/groups.length);
+  gPos[g.id] = { x: CX + R*Math.cos(a), y: CY + R*Math.sin(a), a };
+});
+const cPos = {};
+const rng = (()=>{ let t=20260802; return ()=>((t=((t*1664525+1013904223)>>>0))/4294967296); })();
+companies.forEach(c => {
+  const rels = relsOf[c.id] || [];
+  const k = rels.length;
+  let sx=0, sy=0;
+  rels.forEach(r => { sx += Math.cos(gPos[r.groupId].a); sy += Math.sin(gPos[r.groupId].a); });
+  const a = Math.atan2(sy, sx) + (rng()-.5)*0.35;
+  const r = 150 + (k===1?28:(k===2?8:-18)) + rng()*26;
+  cPos[c.id] = { x: CX + r*Math.cos(a), y: CY + r*Math.sin(a), vx:0, vy:0 };
+});
+(function relax(){
+  const cs = companies.map(c => c.id);
+  for(let it=0; it<520; it++){
+    // 弹簧：公司 → 所属分组
+    for(const cid of cs){
+      const p = cPos[cid], rels = relsOf[cid]||[];
+      for(const r of rels){
+        const g = gPos[r.groupId];
+        const dx=g.x-p.x, dy=g.y-p.y, d=Math.hypot(dx,dy)||1;
+        const f=(d-248)*0.016;
+        p.vx += dx/d*f; p.vy += dy/d*f;
+      }
+    }
+    // 斥力：公司之间
+    for(let i=0;i<cs.length;i++){
+      const a=cPos[cs[i]];
+      for(let j=i+1;j<cs.length;j++){
+        const b=cPos[cs[j]];
+        const dx=b.x-a.x, dy=b.y-a.y, d=Math.hypot(dx,dy)||1;
+        if(d<92){
+          const f=(92-d)/92*1.35;
+          const ux=dx/d, uy=dy/d;
+          a.vx-=ux*f; a.vy-=uy*f;
+          b.vx+=ux*f; b.vy+=uy*f;
+        }
+      }
+    }
+    // 斥力：公司 → 非所属分组节点
+    for(const cid of cs){
+      const p=cPos[cid], mine=new Set((relsOf[cid]||[]).map(r=>r.groupId));
+      for(const g of groups){
+        if(mine.has(g.id)) continue;
+        const q=gPos[g.id], dx=q.x-p.x, dy=q.y-p.y, d=Math.hypot(dx,dy)||1;
+        if(d<175){ const f=(175-d)/175*1.15; p.vx-=dx/d*f; p.vy-=dy/d*f; }
+      }
+    }
+    // 向心约束
+    for(const cid of cs){
+      const p=cPos[cid];
+      const dx=p.x-CX, dy=p.y-CY, d=Math.hypot(dx,dy)||1;
+      if(d>R_IN){ const f=(d-R_IN)*0.02; p.vx-=dx/d*f; p.vy-=dy/d*f; }
+      p.x+=p.vx; p.y+=p.vy; p.vx*=0.82; p.vy*=0.82;
+    }
+  }
+})();
+
+/* ---------- 关系线路径（二次贝塞尔） ---------- */
+function linePath(cid, gid){
+  const p=cPos[cid], g=gPos[gid];
+  const mx=(p.x+g.x)/2, my=(p.y+g.y)/2;
+  let dx=g.x-p.x, dy=g.y-p.y;
+  const d=Math.hypot(dx,dy)||1; dx/=d; dy/=d;
+  const bend=46+Math.min(70,d*0.10);
+  const cx2=mx-dy*bend, cy2=my+dx*bend;
+  return `M ${p.x.toFixed(1)} ${p.y.toFixed(1)} Q ${cx2.toFixed(1)} ${cy2.toFixed(1)} ${g.x.toFixed(1)} ${g.y.toFixed(1)}`;
+}
+
+/* ---------- SVG 渲染 ---------- */
+function renderSVG(){
+  const svg=document.getElementById('svg');
+  let html='<g id="viewport"><defs>';
+  groups.forEach(g=>{
+    html+=`<linearGradient id="gg-${g.id}" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="${g.color}44"/><stop offset="1" stop-color="${g.color}14"/></linearGradient>`;
+  });
+  html+='</defs>';
+  // 参考圆环
+  html+=`<circle cx="${CX}" cy="${CY}" r="${R}" fill="none" stroke="#2b3d5e" stroke-width="1" opacity=".5"/>`;
+  html+=`<circle cx="${CX}" cy="${CY}" r="${R_IN}" fill="none" stroke="#2b3d5e" stroke-width="1" stroke-dasharray="3 7" opacity=".4"/>`;
+  // 连线
+  activeRelations().forEach(r=>{
+    const g=gMap[r.groupId];
+    const dim = REL[r.type].dim;
+    html+=`<path class="gline" data-cid="${r.companyId}" data-gid="${r.groupId}" data-type="${r.type}"
+      d="${linePath(r.companyId,r.groupId)}" fill="none" stroke="${g.color}"
+      stroke-width="${REL[r.type].w}" stroke-dasharray="${REL[r.type].dash||''}"
+      stroke-linecap="round" opacity="${dim?0.28:0.55}"/>`;
+  });
+  // 分组节点
+  groups.forEach(g=>{
+    const p=gPos[g.id], n=(relsOfGroup[g.id]||[]).length;
+    const w=156,h=52, x=p.x-w/2, y=p.y-h/2;
+    html+=`<g class="gnode g-group" data-gid="${g.id}" transform="translate(${p.x} ${p.y})">
+      <rect class="gn-body" x="${-w/2}" y="${-h/2}" width="${w}" height="${h}" rx="16" fill="url(#gg-${g.id})"
+        stroke="${g.color}" stroke-width="2" style="filter:drop-shadow(0 0 16px ${g.color}33)"/>
+      <text class="gname" x="0" y="-6" text-anchor="middle" fill="${g.color}">${g.name}</text>
+      <text class="gcode" x="0" y="12" text-anchor="middle">${n} 家 · <tspan class="g-avg flat">均幅 —</tspan></text>
+    </g>`;
+  });
+  // 公司节点
+  activeCompanies().forEach(c=>{
+    const p=cPos[c.id], rels=relsOf[c.id]||[], k=rels.length;
+    const colors=[...new Set(rels.map(r=>gMap[r.groupId].color))];
+    html+=`<g class="gnode g-company${c.risk?' is-risk':''}" data-cid="${c.id}" transform="translate(${p.x} ${p.y})">
+      ${k>=2?`<circle class="cross-ring" r="10" fill="none" stroke="${colors[0]}" stroke-width="1.2" stroke-dasharray="2 3" opacity=".85"/>`:''}
+      <circle class="gn-body" r="${k>=2?6.5:6}" fill="${c.risk?'#3d4a5c':'#0d1524'}" stroke="${c.risk?'#64748b':'#cbd5e1'}" stroke-width="1.6"/>
+      <text x="0" y="${k>=2?24:20}" text-anchor="middle" class="gname" style="${c.risk?'fill:#7a8aa0':''}">${c.name}</text>
+      <text x="0" y="${k>=2?36:31}" text-anchor="middle" class="gquote flat">— —</text>
+      <circle class="hit" r="20" fill="transparent"/>
+    </g>`;
+  });
+  svg.innerHTML=html+'</g>';
+  applyViewport();
+  applyView();
+}
+
+/* ---------- 高亮 / 淡化 ---------- */
+function relatedSet(){
+  const set=new Set(); const cs=new Set(), gs=new Set();
+  if(state.search){
+    const q=state.search.toLowerCase();
+    activeCompanies().forEach(c=>{
+      if(c.name.toLowerCase().includes(q)||c.code.toLowerCase().includes(q)) cs.add(c.id);
+    });
+  } else if(state.hover){
+    if(state.hover[0]==='c'){ cs.add(state.hover.slice(1)); }
+    else gs.add(state.hover.slice(1));
+  } else if(state.selected){
+    if(state.selected[0]==='c'){ cs.add(state.selected.slice(1)); }
+    else gs.add(state.selected.slice(1));
+  }
+  activeRelations().forEach(r=>{
+    if(cs.has(r.companyId)||gs.has(r.groupId)){ set.add('c'+r.companyId); set.add('g'+r.groupId); }
+  });
+  cs.forEach(c=>set.add('c'+c)); gs.forEach(g=>set.add('g'+g));
+  return set;
+}
+function applyView(){
+  const svg=document.getElementById('svg');
+  const active=relatedSet();
+  svg.querySelectorAll('.gline').forEach(l=>{
+    let on = true;
+    if(state.search){ on = active.has('c'+l.dataset.cid); }
+    else if(state.hover || state.selected){
+      const key = state.hover || state.selected;
+      on = key[0]==='c' ? l.dataset.cid === key.slice(1) : active.has('g'+l.dataset.gid);
+    }
+    if(on && state.relFilter.size) on = state.relFilter.has(l.dataset.type);
+    l.classList.toggle('dim', !on);
+  });
+  svg.querySelectorAll('.gnode').forEach(n=>{
+    const key = n.dataset.cid ? 'c'+n.dataset.cid : 'g'+n.dataset.gid;
+    let on = true;
+    if(state.search || state.hover || state.selected) on = active.has(key);
+    if(on && state.crossOnly && n.dataset.cid){
+      on = (relsOf[n.dataset.cid]||[]).length>=2 || active.has(key);
+    }
+    if(on && state.relFilter.size){
+      const rels = n.dataset.cid ? (relsOf[n.dataset.cid]||[]) : (relsOfGroup[n.dataset.gid]||[]);
+      on = rels.some(r=>state.relFilter.has(r.type));
+    }
+    n.classList.toggle('dim', !on);
+  });
+}
+function clearFocus(){ state.hover=null; state.selected=null; applyView(); }
+
+/* ---------- 详情面板 ---------- */
+function relIcon(type, color, clsExtra=''){
+  const dash=relDashCls(type), thin=relThin(type);
+  return `<i class="${dash}${thin?' thin':''} ${clsExtra}" style="border-color:${color}"></i>`;
+}
+function renderDetail(){
+  const box=document.getElementById('detail');
+  const isNarrow = window.matchMedia('(max-width:1020px)').matches;
+  box.classList.toggle('open', isNarrow && !!state.selected);
+  const sel=state.selected;
+  if(!sel){ box.innerHTML=`
+    <h3 style="color:var(--muted)">👈 点击节点查看详情</h3>
+    <p class="d-desc" style="margin-top:10px">悬停可高亮关系线；点击公司或板块节点，这里会展示：</p>
+    <h4>公司节点</h4>
+    <p class="d-desc">所属板块清单（彩色徽章）、每条关系的类型与来源、风险备注。</p>
+    <h4>板块节点</h4>
+    <p class="d-desc">板块描述、关系类型分布、成员公司列表。</p>
+    <div class="d-note">💡 详情面板可删除个股或单条关系（有确认弹窗）；图例点击可多选筛选关系类型；「✕ 重置」可恢复已删除数据。</div>`; return; }
+  if(sel[0]==='c'){
+    const c=cMap[sel.slice(1)], rels=relsOf[c.id]||[];
+    const tags=rels.map(r=>{
+      const g=gMap[r.groupId];
+      return `<span class="gtag" style="color:${g.color};border-color:${g.color}66">${relIcon(r.type,g.color)}${g.name} · ${REL[r.type].label}</span>`;
+    }).join('');
+    const q=QUOTE[c.id];
+    const qCls=q&&q.price!==null?(q.pct===null||q.pct===0?'flat':(q.pct>0?'up':'down')):'';
+    const qRow=q&&q.price!==null
+      ? `<div class="d-quote"><span class="q-price ${qCls}">${q.price.toFixed(2)}</span>
+        <span class="q-pct ${qCls}">${q.pct===null?'':(q.pct>=0?'+':'')+q.pct.toFixed(2)+'%'}</span>
+        ${q.ts?`<span class="q-time">${fmtQuoteTime(q.ts)}</span>`:''}</div>`
+      : '<p class="d-desc" style="margin-top:8px">行情暂不可用（—）</p>';
+    box.innerHTML=`
+      <h3>${c.name}<span class="d-code">${c.code}</span>${c.risk?'<span class="d-dot" style="background:var(--gray)"></span>':''}<button class="del-company" data-del-company="${c.id}">删除个股</button></h3>
+      ${qRow}
+      <h4>所属板块（${rels.length} 条关系）</h4>
+      <div class="d-tags">${tags}</div>
+      <h4>关系明细 · 可删除单条</h4>
+      <ul class="rel-list">${rels.map(r=>{
+        const g=gMap[r.groupId];
+        return `<li>${relIcon(r.type,g.color,'rel-line')}<div><b style="color:${g.color}">${g.name}</b> · ${REL[r.type].label} — ${r.note}<small>来源：${r.source}</small></div><button class="mini-del" data-del-rel="${r.companyId}|${r.groupId}" title="删除该关系">✕</button></li>`;
+      }).join('')}</ul>
+      ${c.note?`<div class="d-note">⚠ ${c.note}</div>`:''}`;
+    return;
+  }
+  const g=gMap[sel.slice(1)], rels=relsOfGroup[g.id]||[];
+  const dist={};
+  rels.forEach(r=>dist[r.type]=(dist[r.type]||0)+1);
+  const gq=groupAvgQuote(g.id);
+  const gqCls=gq?(gq.avg>0?'up':(gq.avg<0?'down':'flat')):'flat';
+  const gqRow=gq
+    ? `<div class="d-quote"><span class="q-price ${gqCls}">${fmtPct(gq.avg)}</span>
+      <span class="q-pct ${gqCls}">均幅 · ${gq.n}/${gq.total} 家有行情</span>
+      ${quoteTs?`<span class="q-time">${fmtQuoteTime(quoteTs)}</span>`:''}</div>`
+    : '<p class="d-desc" style="margin-top:8px">暂无可用行情计算板块均幅</p>';
+  box.innerHTML=`
+    <h3><span class="d-dot" style="background:${g.color};box-shadow:0 0 12px ${g.color}"></span>${g.name}</h3>
+    <p class="d-desc">${g.desc}</p>
+    ${gqRow}
+    <h4>关系类型分布</h4>
+    <div class="d-tags">${Object.entries(dist).map(([t,n])=>`<span class="gtag" style="color:${g.color};border-color:${g.color}55">${relIcon(t,g.color)}${REL[t].label} ${n}</span>`).join('')}</div>
+    <h4>成员公司（${rels.length} 家）· 可删除单条关系</h4>
+    <ul class="rel-list">${rels.map(r=>{
+      const c=cMap[r.companyId];
+      return `<li>${relIcon(r.type,g.color,'rel-line')}<div><b>${c.name}</b><small>${c.code} · ${r.note}（${r.source}）</small></div><button class="mini-del" data-del-rel="${r.companyId}|${r.groupId}" title="删除该关系">✕</button></li>`;
+    }).join('')}</ul>`;
+}
+
+/* ---------- 统计 / 图例 ---------- */
+function renderStats(){
+  const cs=activeCompanies(), rels=activeRelations();
+  const cross=cs.filter(c=>(relsOf[c.id]||[]).length>=2).length;
+  document.getElementById('stats').innerHTML=`
+    <span class="stat"><b>${groups.length}</b>板块</span>
+    <span class="stat"><b>${cs.length}</b>公司</span>
+    <span class="stat"><b>${rels.length}</b>条关系</span>
+    <span class="stat"><b class="cross">${cross}</b>跨板块公司</span>`;
+}
+function renderLegend(){
+  const allOn=state.relFilter.size===0;
+  let html=`<span class="lg${allOn?' active':''}" data-type="all"><b>全部</b></span>`;
+  html+=Object.entries(REL).map(([t,v])=>{
+    const cls=relDashCls(t), thin=relThin(t);
+    const on=state.relFilter.has(t);
+    return `<span class="lg${on?' active':''}" data-type="${t}"><i class="${cls}${thin?' thin':''}${v.dim?' dim':''}"></i><b>${v.label}</b></span>`;
+  }).join('');
+  document.getElementById('legendRel').innerHTML=html;
+}
+
+/* ---------- 行情（腾讯行情为主 + 东方财富兜底） ---------- */
+const QUOTE = {};       // cid -> { price, pct, ts }
+let quoteTs = null, quoteFrom = '';
+function qPrefix(code){
+  if(/\.HK$/i.test(code)) return 'hk';
+  if(/^[4-9]/.test(code)) return 'bj';
+  return code[0]==='6' ? 'sh' : 'sz';
+}
+function qSymbol(code){ return qPrefix(code)+code.replace(/\.HK$/i,''); }
+function fmtNum(v){
+  if(v===null||v===undefined||v===''||v==='-') return null;
+  const n=+v; return isNaN(n)?null:n;
+}
+function parseTs(s){
+  if(!s) return null;
+  const dg=String(s).replace(/\D/g,'');
+  if(dg.length>=14){
+    const y=+dg.slice(0,4), mo=+dg.slice(4,6)-1, d=+dg.slice(6,8), h=+dg.slice(8,10), mi=+dg.slice(10,12), se=+dg.slice(12,14);
+    if(mo>=0&&mo<12&&d>=1&&d<=31) return Math.floor(new Date(y,mo,d,h,mi,se).getTime()/1000);
+  }
+  return null;
+}
+function fmtQuoteTime(ts){
+  if(!ts) return '';
+  const d=new Date(ts*1000);
+  const p=n=>String(n).padStart(2,'0');
+  return p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes());
+}
+/* 腾讯 qt.gtimg.cn：<script> 方式加载，定义 v_sz000917 等全局变量，file:// 下无跨域限制 */
+function loadQuotesTencent(){
+  const chunks=[], cs=companies.slice();
+  while(cs.length) chunks.push(cs.splice(0,25));
+  return Promise.all(chunks.map(ch=>new Promise((resolve,reject)=>{
+    const s=document.createElement('script');
+    s.charset='gbk';
+    s.src='https://qt.gtimg.cn/q='+ch.map(c=>qSymbol(c.code)).join(',');
+    const timer=setTimeout(()=>done(()=>reject(new Error('timeout'))),9000);
+    function done(fn){ clearTimeout(timer); s.onload=s.onerror=null; if(s.parentNode) s.parentNode.removeChild(s); fn(); }
+    s.onload=()=>done(()=>resolve());
+    s.onerror=()=>done(()=>reject(new Error('load error')));
+    document.head.appendChild(s);
+  })));
+}
+function readTencentQuotes(){
+  let n=0, latest=0;
+  companies.forEach(c=>{
+    const raw=window['v_'+qSymbol(c.code)];
+    if(typeof raw==='string' && raw){
+      const f=raw.split('~');
+      const q={ price:fmtNum(f[3]), pct:fmtNum(f[32]), ts:parseTs(f[30]) };
+      QUOTE[c.id]=q;
+      if(q.price!==null) n++;
+      if(q.ts&&q.ts>latest) latest=q.ts;
+    }else QUOTE[c.id]=null;
+  });
+  return { n:n, latest:latest };
+}
+/* 东方财富公开接口（http/https 源下可用，作为兜底） */
+async function loadQuotesEastmoney(){
+  const secids=companies.map(c=>{
+    const code=c.code;
+    return /\.HK$/i.test(code) ? '116.'+code.replace(/\.HK$/i,'') : (code[0]==='6'?'1.':'0.')+code;
+  }).join(',');
+  const res=await fetch('https://push2.eastmoney.com/api/qt/ulist.np/get?fltt=2&invt=2&fields=f2,f3,f12,f14,f124&secids='+secids);
+  if(!res.ok) throw new Error('HTTP '+res.status);
+  const j=await res.json();
+  const diff=(j&&j.data&&j.data.diff)||[];
+  const byCode={};
+  diff.forEach(d=>{ byCode[String(d.f12)]={ price:fmtNum(d.f2), pct:fmtNum(d.f3), ts:fmtNum(d.f124) }; });
+  let n=0, latest=0;
+  companies.forEach(c=>{
+    const q=byCode[c.code.replace(/\.HK$/i,'')];
+    QUOTE[c.id]=q?{price:q.price,pct:q.pct,ts:q.ts}:null;
+    if(q&&q.price!==null) n++;
+    if(q&&q.ts>latest) latest=q.ts;
+  });
+  return { n:n, latest:latest };
+}
+async function loadQuotes(manual){
+  const st=document.getElementById('quoteStatus');
+  if(st) st.innerHTML='<b>行情</b>加载中…';
+  const btn=document.getElementById('btnRefresh'); if(btn) btn.disabled=true;
+  let res=null, from='';
+  try{
+    await loadQuotesTencent();
+    res=readTencentQuotes(); from='腾讯';
+  }catch(e){
+    try{ res=await loadQuotesEastmoney(); from='东方财富'; }
+    catch(e2){ res=null; }
+  }
+  if(res){
+    quoteTs=res.latest||null; quoteFrom=from;
+    renderQuotes();
+    renderGroupQuotes();
+    refreshQuoteStatus();
+  }else{
+    renderGroupQuotes();
+    if(st) st.innerHTML='<b>行情</b><span style="color:#f87171">获取失败</span>';
+  }
+  if(btn) btn.disabled=false;
+  if(state.selected&&state.selected[0]==='c') renderDetail();
+}
+function groupAvgQuote(gid){
+  const rels=relsOfGroup[gid]||[];
+  let sum=0, n=0;
+  rels.forEach(r=>{ const q=QUOTE[r.companyId]; if(q&&q.pct!==null){ sum+=q.pct; n++; } });
+  return n? { avg:sum/n, n:n, total:rels.length } : null;
+}
+function fmtPct(v){ return (v>=0?'+':'')+v.toFixed(2)+'%'; }
+function renderGroupQuotes(){
+  document.querySelectorAll('#svg .gnode[data-gid] .g-avg').forEach(el=>{
+    const gid=el.closest('.gnode').dataset.gid;
+    const gq=groupAvgQuote(gid);
+    if(gq){ el.textContent='均幅 '+fmtPct(gq.avg); el.setAttribute('class','g-avg '+(gq.avg>0?'up':(gq.avg<0?'down':'flat'))); }
+    else { el.textContent='均幅 —'; el.setAttribute('class','g-avg flat'); }
+  });
+}
+function refreshQuoteStatus(){
+  const st=document.getElementById('quoteStatus');
+  if(!st) return;
+  const cs=activeCompanies();
+  const n=cs.filter(c=>QUOTE[c.id]&&QUOTE[c.id].price!==null).length;
+  st.innerHTML='<b>行情</b>'+n+'/'+cs.length+(quoteTs?' · '+fmtQuoteTime(quoteTs):'')+(quoteFrom?' · '+quoteFrom:'');
+}
+function renderQuotes(){
+  document.querySelectorAll('#svg .gnode[data-cid]').forEach(n=>{
+    const el=n.querySelector('.gquote'); if(!el) return;
+    const q=QUOTE[n.dataset.cid];
+    if(q&&q.price!==null){
+      el.textContent=q.price.toFixed(2)+' '+(q.pct===null?'':(q.pct>=0?'+':'')+q.pct.toFixed(2)+'%');
+      el.classList.remove('up','down','flat');
+      if(q.pct===null||q.pct===0) el.classList.add('flat');
+      else el.classList.add(q.pct>0?'up':'down');
+    }else{
+      el.textContent='— —';
+      el.classList.remove('up','down'); el.classList.add('flat');
+    }
+  });
+}
+
+/* ---------- 事件 ---------- */
+function bindEvents(){
+  const svg=document.getElementById('svg');
+  svg.addEventListener('mouseover',e=>{
+    const n=e.target.closest('.gnode'); if(!n) return;
+    state.hover = n.dataset.cid ? 'c'+n.dataset.cid : 'g'+n.dataset.gid;
+    applyView();
+  });
+  svg.addEventListener('mouseout',e=>{
+    const n=e.target.closest('.gnode'); if(!n) return;
+    const rt=e.relatedTarget;
+    if(rt && rt.closest && rt.closest('.gnode')===n) return;
+    if(state.hover) { state.hover=null; applyView(); }
+  });
+  svg.addEventListener('click',e=>{
+    if(state.suppressClick){ state.suppressClick=false; return; }
+    const n=e.target.closest('.gnode');
+    if(n){ state.selected = n.dataset.cid ? 'c'+n.dataset.cid : 'g'+n.dataset.gid; }
+    else { state.selected=null; }
+    state.hover=null; renderDetail(); applyView();
+    if(state.selected && window.matchMedia('(max-width:1020px)').matches){
+      const d=document.getElementById('detail');
+      if(!d.querySelector('#btnDetailClose'))
+        d.insertAdjacentHTML('afterbegin','<button class="d-close" id="btnDetailClose" aria-label="关闭">✕</button>');
+    }
+  });
+  svg.addEventListener('pointerdown',e=>{
+    const n=e.target.closest('.gnode[data-cid]'); if(!n) return;
+    const cid=n.dataset.cid, p=cPos[cid];
+    const q=svgPoint(e);
+    p.x=(q.x-view.tx)/view.k; p.y=(q.y-view.ty)/view.k;
+    let dragging=true, moved=false;
+    const move=ev=>{
+      if(!dragging) return;
+      const q2=svgPoint(ev);
+      const nx=(q2.x-view.tx)/view.k, ny=(q2.y-view.ty)/view.k;
+      if(Math.hypot(nx-p.x,ny-p.y)>2) moved=true;
+      p.x=nx; p.y=ny; p.vx=0; p.vy=0;
+      svg.querySelectorAll(`.gline[data-cid="${cid}"]`).forEach(l=>{ l.setAttribute('d', linePath(cid, l.dataset.gid)); });
+      const node=svg.querySelector(`.gnode[data-cid="${cid}"]`);
+      if(node) node.setAttribute('transform',`translate(${p.x.toFixed(1)} ${p.y.toFixed(1)})`);
+    };
+    const up=()=>{
+      dragging=false;
+      window.removeEventListener('pointermove',move); window.removeEventListener('pointerup',up);
+      if(moved){ state.suppressClick=true; setTimeout(()=>{ state.suppressClick=false; },0); }
+    };
+    window.addEventListener('pointermove',move);
+    window.addEventListener('pointerup',up);
+  });
+  // 滚轮缩放（以鼠标位置为中心；触控板捏合同样生效）
+  svg.addEventListener('wheel',e=>{
+    e.preventDefault();
+    const q=svgPoint(e);
+    zoomAt(q.x,q.y, e.deltaY<0?1.13:1/1.13);
+  },{passive:false});
+  // 空白区域拖拽平移
+  svg.addEventListener('pointerdown',e=>{
+    if(e.target.closest('.gnode')) return;
+    if(e.button!==0&&e.button!==1) return;
+    e.preventDefault();
+    const q0=svgPoint(e);
+    let moved=false;
+    const move=ev=>{
+      const q=svgPoint(ev);
+      const dx=q.x-q0.x, dy=q.y-q0.y;
+      if(Math.abs(dx)+Math.abs(dy)>1.2) moved=true;
+      if(moved){ view.tx+=dx; view.ty+=dy; applyViewport(); }
+      q0.x=q.x; q0.y=q.y;
+    };
+    const up=()=>{
+      window.removeEventListener('pointermove',move); window.removeEventListener('pointerup',up);
+      svg.classList.remove('panning');
+      if(moved){ state.suppressClick=true; setTimeout(()=>{ state.suppressClick=false; },0); }
+    };
+    svg.classList.add('panning');
+    window.addEventListener('pointermove',move);
+    window.addEventListener('pointerup',up);
+  });
+  // 缩放控件
+  document.getElementById('btnZoomIn').addEventListener('click',()=>zoomAt(CX,CY,1.3));
+  document.getElementById('btnZoomOut').addEventListener('click',()=>zoomAt(CX,CY,1/1.3));
+  document.getElementById('btnZoomFit').addEventListener('click',resetView);
+  document.getElementById('btnRefresh').addEventListener('click',()=>loadQuotes(true));
+  // 图例点击筛选关系类型（可多选）
+  document.getElementById('legendRel').addEventListener('click',e=>{
+    const item=e.target.closest('.lg'); if(!item) return;
+    const t=item.dataset.type;
+    if(t==='all') state.relFilter.clear();
+    else if(state.relFilter.has(t)) state.relFilter.delete(t);
+    else state.relFilter.add(t);
+    state.hover=null; state.selected=null;
+    renderLegend(); renderDetail(); applyView();
+  });
+  // 删除确认弹窗
+  const confirmDialog=document.getElementById('confirmDialog');
+  let confirmAction=null;
+  function askConfirm(title,msg,action){
+    document.getElementById('confirmTitle').textContent=title;
+    document.getElementById('confirmMsg').innerHTML=msg;
+    confirmAction=action;
+    confirmDialog.showModal();
+  }
+  function closeConfirm(){ confirmDialog.close(); confirmAction=null; }
+  document.getElementById('confirmOk').addEventListener('click',()=>{ const a=confirmAction; closeConfirm(); if(a) a(); });
+  document.getElementById('confirmCancel').addEventListener('click',closeConfirm);
+  document.getElementById('confirmCancel2').addEventListener('click',closeConfirm);
+  confirmDialog.addEventListener('click',e=>{ if(e.target===confirmDialog) closeConfirm(); });
+  document.getElementById('searchInput').addEventListener('input',e=>{
+    state.search=e.target.value.trim();
+    applyView();
+  });
+  document.getElementById('btnCross').addEventListener('click',e=>{
+    state.crossOnly=!state.crossOnly;
+    e.currentTarget.classList.toggle('active',state.crossOnly);
+    applyView();
+  });
+  document.getElementById('btnReset').addEventListener('click',()=>{
+    state.search=''; state.crossOnly=false; state.hover=null; state.selected=null;
+    state.removedCompanies.clear(); state.removedRels.clear(); state.relFilter.clear();
+    document.getElementById('searchInput').value='';
+    document.getElementById('btnCross').classList.remove('active');
+    recomputeData();
+    renderStats(); renderLegend(); renderSVG(); renderQuotes(); renderGroupQuotes(); refreshQuoteStatus(); renderDetail(); applyView();
+  });
+  // 帮助弹窗
+  const help=document.getElementById('helpDialog');
+  document.getElementById('btnHelp').addEventListener('click',()=>help.showModal());
+  document.getElementById('btnHelpClose').addEventListener('click',()=>help.close());
+  help.addEventListener('click',e=>{ if(e.target===help) help.close(); });
+  // 详情面板：关闭 / 删除个股 / 删除关系
+  function afterEdit(){
+    recomputeData();
+    renderStats(); renderLegend(); renderSVG(); renderQuotes(); renderGroupQuotes(); refreshQuoteStatus(); renderDetail(); applyView();
+  }
+  document.getElementById('detail').addEventListener('click',e=>{
+    if(e.target.closest('#btnDetailClose')){ document.getElementById('detail').classList.remove('open'); return; }
+    const dc=e.target.closest('[data-del-company]');
+    if(dc){
+      const c=cMap[dc.dataset.delCompany];
+      askConfirm('删除个股','确定从图谱中删除 <b>'+c.name+'（'+c.code+'）</b>？<br>该公司的全部关系线会一并移除；本次会话内可点「✕ 重置」恢复。',()=>{
+        state.removedCompanies.add(c.id);
+        if(state.selected==='c'+c.id) state.selected=null;
+        afterEdit();
+      });
+      return;
+    }
+    const dr=e.target.closest('[data-del-rel]');
+    if(dr){
+      const pair=dr.dataset.delRel.split('|');
+      const c=cMap[pair[0]], g=gMap[pair[1]];
+      askConfirm('删除关系','确定删除 <b>'+c.name+' ↔ '+g.name+'</b> 的这条关系？<br>公司本身保留；本次会话内可点「✕ 重置」恢复。',()=>{
+        state.removedRels.add(pair[0]+'|'+pair[1]);
+        afterEdit();
+      });
+    }
+  });
+}
+
+/* ---------- 初始化 ---------- */
+recomputeData();
+renderStats(); renderLegend(); renderSVG(); renderDetail(); bindEvents(); loadQuotes();
+</script>
+</body>
+</html>

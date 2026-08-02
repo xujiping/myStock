@@ -70,6 +70,14 @@ npm run restart -- --all     # 停止所有 serve 实例后重启主看板
 - 关注标的条件触发后可一键「转入持仓」，带出代码与逻辑，保存后原关注记录自动移除。
 - 评级表达研究优先级，不代表上涨概率。
 
+### 板块与公司关系图谱
+
+- 独立图谱页面 `http://127.0.0.1:4173/sector-graph.html`（看板侧边栏「研究依据 → 板块图谱」进入），用 SVG 力导向圆环展示板块与公司的多对多关系。
+- **板块**节点来自关注板块池（`kai_invest_sector`）；**公司**节点来自持仓/关注股票（`kai_invest_portfolio`）与各板块采集指标中的龙头；基金与 ETF 不进入图谱。
+- **关系**分为三类：板块龙头、概念龙头（来自板块采集 `indicators.leaders / concepts.leader`，客观数据）与买入逻辑归属（持仓「买入逻辑」文本包含板块名，人工录入）。
+- 行情显示投资库行情快照（`kai_invest_stock_quote`），点「⟳ 刷新」调用系统行情刷新接口后重载；无行情公司显示「—」。
+- 页面只读：图谱中的删除/重置仅在当前浏览器会话内生效，不写回数据库。
+
 ### 宏观变量
 
 - 记录当前事实、最近变化、短期影响、中期影响和应对动作。
@@ -282,6 +290,8 @@ POST   /api/investment/daily-analysis
 POST   /api/investment/gold/refresh
 GET    /api/investment/collect[/{macro|market|sector|all}]
 POST   /api/investment/collect/{macro|market|sector|all}
+
+GET    /api/investment/sector-graph
 
 GET    /api/investment/{portfolio|sectors|market|decisions|trades}
 POST   /api/investment/{resource}
