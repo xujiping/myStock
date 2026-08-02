@@ -1,32 +1,35 @@
 {
-  "name": "mystock-gpt55",
-  "version": "1.0.0",
-  "description": "个人博主观点视频归档、转写与 AI 总结网站",
-  "main": "server/index.js",
-  "scripts": {
-    "dev": "concurrently \"npm:dev:server\" \"npm:dev:web\"",
-    "dev:server": "node --watch server/index.js",
-    "dev:web": "vite --host 0.0.0.0",
-    "start": "NODE_ENV=production node server/index.js",
-    "build": "vite build",
-    "preview": "vite preview --host 0.0.0.0"
+  "name": "kaige-ai-investment-dashboard",
+  "version": "2.0.0",
+  "private": true,
+  "description": "以持仓、市场、板块、决策和视频观点为依据的 AI 辅助投资系统",
+  "engines": {
+    "node": ">=22.5.0"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "module",
+  "scripts": {
+    "analyze": "node analyze-videos.cjs",
+    "summarize": "node analyze-videos.cjs --summarize-only",
+    "update": "node update.cjs",
+    "update:open": "node update.cjs --open",
+    "watch": "node watch.cjs",
+    "serve": "node --disable-warning=ExperimentalWarning serve.cjs --no-open",
+    "restart": "node scripts/restart-dashboard.cjs",
+    "restart:open": "node scripts/restart-dashboard.cjs --open",
+    "open": "node --disable-warning=ExperimentalWarning serve.cjs",
+    "check": "node scripts/check-investment.cjs",
+    "test": "node --test scripts/test/parsers-and-store.test.cjs",
+    "backup": "node scripts/backup-investment.cjs",
+    "backup:list": "node scripts/backup-investment.cjs --list",
+    "collect:market": "node --disable-warning=ExperimentalWarning scripts/collect-market.cjs",
+    "analyze:market": "node --disable-warning=ExperimentalWarning scripts/analyze-market.cjs",
+    "analyze:sector": "node --disable-warning=ExperimentalWarning scripts/analyze-sector.cjs",
+    "collect:macro": "node --disable-warning=ExperimentalWarning scripts/collect-macro.cjs",
+    "collect:sector": "node --disable-warning=ExperimentalWarning scripts/collect-sector.cjs",
+    "collect": "node --disable-warning=ExperimentalWarning scripts/collect-all.cjs"
+  },
   "dependencies": {
-    "@vitejs/plugin-react": "^6.0.3",
-    "concurrently": "^10.0.3",
-    "cors": "^2.8.6",
-    "dotenv": "^17.4.2",
-    "express": "^5.2.1",
-    "lucide-react": "^1.24.0",
-    "multer": "^2.2.0",
-    "mysql2": "^3.22.6",
-    "nanoid": "^5.1.16",
-    "react": "^19.2.7",
-    "react-dom": "^19.2.7",
-    "vite": "^8.1.4"
+    "@alicloud/nls-filetrans-2018-08-17": "^1.0.0",
+    "cos-nodejs-sdk-v5": "^3.0.0",
+    "dotenv": "^16.6.1"
   }
 }

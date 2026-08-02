@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>A 股视频观点看板</title>
+  <style>
+    :root { --ink:#17201d; --muted:#69746f; --paper:#f5f3ed; --line:#d8d5cd; --green:#0c7257; --green-bg:#dff1e8; --amber:#975d00; --amber-bg:#fce8bd; --red:#a2372d; --red-bg:#f7ddd8; --night:#152520; }
+    * { box-sizing:border-box; }
+    body { margin:0; color:var(--ink); background:var(--paper); font:15px/1.65 ui-serif, "Songti SC", "STSong", "Noto Serif CJK SC", serif; }
+    .grain { position:fixed; inset:0; opacity:.22; pointer-events:none; background-image:radial-gradient(#70766e 0.45px, transparent .55px); background-size:5px 5px; mix-blend-mode:multiply; }
+    main { width:min(1180px, calc(100% - 40px)); margin:0 auto; padding:34px 0 72px; position:relative; }
+    header { display:grid; grid-template-columns:1fr auto; align-items:end; border-bottom:2px solid var(--ink); padding:0 0 22px; gap:20px; }
+    .eyebrow { color:var(--green); font:700 12px/1.2 ui-sans-serif, "PingFang SC", sans-serif; letter-spacing:.16em; }
+    h1,h2,h3,p { margin:0; } h1 { font-size:clamp(34px, 6vw, 64px); letter-spacing:-.07em; line-height:1; margin-top:7px; } h2 { font-size:22px; letter-spacing:-.03em; } h3 { font-size:17px; }
+    .stamp { text-align:right; font:12px/1.45 ui-monospace, "SFMono-Regular", monospace; color:var(--muted); }
+    .intro { display:flex; justify-content:space-between; gap:24px; padding:20px 0 28px; color:#3e4843; border-bottom:1px solid var(--line); }
+    .intro p { max-width:730px; } .intro strong { color:var(--green); }
+    .signals-full { margin:14px 0 36px; }
+    .signal-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:0; align-items:start; border:1px solid var(--line); background:#fbfaf6; }
+    .signal-col { padding:14px 16px 18px; } .signal-col + .signal-col { border-left:1px solid var(--line); }
+    .signal-col-head { display:flex; align-items:center; gap:8px; padding-bottom:10px; margin-bottom:4px; border-bottom:2px solid var(--red); }
+    .signal-col.caution .signal-col-head { border-color:var(--amber); } .signal-col.watch .signal-col-head { border-color:#8a918d; }
+    .signal-col-title { font:700 15px/1.2 ui-sans-serif, "PingFang SC", sans-serif; color:var(--ink); } .signal-col-count { color:var(--muted); font:12px ui-sans-serif, "PingFang SC", sans-serif; }
+    .pill { display:inline-block; padding:1px 7px; border-radius:999px; background:var(--red-bg); color:var(--red); font:700 11px/1.6 ui-sans-serif, "PingFang SC", sans-serif; white-space:nowrap; }
+    .pill.caution { background:var(--amber-bg); color:var(--amber); }.pill.watch { background:#e9eae7; color:#5d6661; }
+    .signal-row { display:flex; align-items:baseline; justify-content:space-between; gap:10px; padding:9px 0; border-bottom:1px dotted #e1ddd2; }
+    .signal-row:last-child { border-bottom:0; }
+    .signal-sector { font:700 15px/1.3 ui-sans-serif, "PingFang SC", sans-serif; letter-spacing:-.01em; }
+    .signal-meta { color:var(--muted); font:12px/1.4 ui-sans-serif, "PingFang SC", sans-serif; margin-top:2px; }
+    .signal-quote { color:#4a534e; font:13px/1.5 ui-serif, "Songti SC", serif; margin-top:5px; }
+    .signal-side { text-align:right; flex-shrink:0; }
+    .signal-more { border-top:1px dotted #e1ddd2; margin-top:2px; }.signal-more summary { min-height:36px; padding:8px 0; color:var(--green); font-size:12px; }.signal-more .signal-row { margin-left:0; }
+    .controls { display:flex; align-items:center; justify-content:space-between; gap:14px; border-bottom:1px solid var(--line); padding-bottom:14px; margin-bottom:0; }
+    .tabs { display:flex; flex-wrap:wrap; gap:7px; }.tab { appearance:none; min-height:44px; border:1px solid #bac0ba; background:transparent; color:#44504a; border-radius:999px; padding:7px 13px; cursor:pointer; font:600 13px ui-sans-serif, "PingFang SC", sans-serif; }.tab.active,.tab:hover { color:#f5f3ed; background:var(--night); border-color:var(--night); }
+    .search { width:230px; min-height:44px; border:0; border-bottom:1px solid #89938d; border-radius:0; background:transparent; padding:7px 1px; font:14px ui-sans-serif, "PingFang SC", sans-serif; }
+    .timeline { position:relative; }.day { content-visibility:auto; contain-intrinsic-size:auto 760px; display:grid; grid-template-columns:128px minmax(0,1fr); gap:22px; padding:29px 0; border-bottom:1px solid var(--line); }.date { font:700 17px/1.3 ui-sans-serif, "PingFang SC", sans-serif; position:sticky; top:10px; height:max-content; }.date small { display:block; color:var(--muted); font:12px/1.4 ui-sans-serif, "PingFang SC", sans-serif; margin-top:4px; }
+    .videos { display:grid; gap:12px; }.video { background:#fcfbf7; border:1px solid var(--line); }.video-top { padding:14px 16px 12px; }.video-title { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; }.video-title > div { min-width:0; }.video-title h3 { overflow-wrap:anywhere; }.video-source { color:var(--muted); font:12px ui-monospace, "SFMono-Regular", monospace; margin-top:3px; }.video-link { display:inline-flex; min-height:44px; align-items:center; flex-shrink:0; }
+    .tag-row { display:flex; gap:6px; flex-wrap:wrap; margin-top:13px; }.tag { border:1px solid #cdd5ce; padding:2px 8px; border-radius:999px; font:700 12px ui-sans-serif, "PingFang SC", sans-serif; color:#405048; }.tag.bull { color:var(--red); border-color:#e0b3ac; }.tag.caution { color:var(--amber); border-color:#e7c57c; }.tag.watch { color:#606b65; }
+    .summary { padding:0 16px 13px; }.summary-label { color:var(--muted); font:700 11px/1.2 ui-sans-serif, "PingFang SC", sans-serif; letter-spacing:.11em; text-transform:uppercase; }.quote-list { margin:7px 0 0; padding:0; list-style:none; }.quote-list li { padding:5px 0 5px 13px; border-top:1px solid #e5e2da; position:relative; }.quote-list li:before { content:""; position:absolute; width:4px; height:4px; border-radius:50%; background:var(--green); left:1px; top:14px; }
+    details { border-top:1px solid var(--line); } summary { cursor:pointer; min-height:44px; display:flex; align-items:center; padding:10px 16px; font:600 13px ui-sans-serif, "PingFang SC", sans-serif; color:#44514a; } .transcript { white-space:pre-wrap; overflow-wrap:anywhere; padding:3px 16px 16px; color:#3f4944; font-size:14px; max-height:510px; overflow:auto; }
+    .status { min-height:20px; margin:10px 0 0; color:var(--muted); font:12px/1.4 ui-sans-serif, "PingFang SC", sans-serif; }.empty { padding:40px 0; color:var(--muted); text-align:center; }.notice { margin-top:32px; color:var(--muted); font-size:12px; }.sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+    :focus-visible { outline:3px solid color-mix(in oklch, var(--green) 70%, white); outline-offset:3px; }
+    @media (max-width:900px) { .signal-grid { grid-template-columns:1fr; } .signal-col + .signal-col { border-left:0; border-top:1px solid var(--line); } }
+    @media (max-width:650px) { main { width:min(100% - 28px, 1180px); padding-top:23px; } header { grid-template-columns:1fr; }.stamp { text-align:left; }.intro,.controls { display:block; }.intro p { margin-bottom:8px; }.search { width:100%; margin-top:12px; }.day { grid-template-columns:1fr; gap:12px; }.date { position:static; }.video-top,.summary { padding-left:14px; padding-right:14px; } summary,.transcript { padding-left:14px; padding-right:14px; } }
+    @media (prefers-reduced-motion:reduce) { *,*::before,*::after { scroll-behavior:auto !important; transition-duration:.01ms !important; } }
+  </style>
+</head>
+<body>
+  <div class="grain"></div>
+  <main>
+    <header><div><div class="eyebrow">凯哥视频分析 · A-SHARE INTELLIGENCE</div><h1>投资观点看板</h1></div><div class="stamp" id="stamp"></div></header>
+    <section class="intro"><p>将视频转写中的观点按<strong>日期倒序</strong>归档。方向信号仅基于同句中的表达与风险词自动推断；点击任一视频可查看完整原文与对应的本地源视频。</p><div id="stats"></div></section>
+    <section class="signals-full" aria-labelledby="signals-title"><h2 id="signals-title">重点关注板块</h2><div class="signal-grid" id="signals"></div></section>
+    <section><div class="controls"><div><h2>视频时间线</h2><div class="tabs" id="tabs" aria-label="按观点方向筛选"><button class="tab active" data-filter="all" aria-pressed="true">全部</button><button class="tab" data-filter="看涨" aria-pressed="false">看涨</button><button class="tab" data-filter="偏谨慎" aria-pressed="false">偏谨慎</button><button class="tab" data-filter="观察" aria-pressed="false">观察</button></div></div><label class="sr-only" for="search">搜索视频观点</label><input class="search" id="search" type="search" placeholder="搜索板块、个股代码、原文…" autocomplete="off"></div><p class="status" id="result-status" aria-live="polite"></p><div class="timeline" id="timeline"></div></section>
+    <p class="notice">说明：本页是自动转写与信息整理工具，不构成投资建议。个股仅在识别到明确六码股票代码时展示；所有结论请结合完整视频与公开信息独立核验。</p>
+  </main>
+  <script>
+    const $ = (selector) => document.querySelector(selector);
+    const escapeHtml = (text = '') => String(text).replace(/[&<>'"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' }[c]));
+    const directionClass = (direction) => direction === '看涨' ? 'bull' : direction === '偏谨慎' ? 'caution' : 'watch';
+
+    let filter = 'all'; let keyword = '';
+    let currentData = null;
+    let videoById = new Map();
+    let searchTimer = null;
+
+    function render() {
+      const data = currentData;
+      const videos = (data && data.videos) || [];
+      videoById = new Map(videos.map(video => [video.id, video]));
+      const sectorMap = new Map();
+      videos.forEach(video => (video.analysis.sectorViews || []).forEach(view => {
+        const current = sectorMap.get(view.sector) || { sector:view.sector, score:0, count:0, time:[], quotes:[] };
+        current.score += view.score; current.count++; current.time.push(...view.time); current.quotes.push(...view.quotes);
+        sectorMap.set(view.sector, current);
+      }));
+      const sectorSignals = [...sectorMap.values()].map(item => ({ ...item, direction:item.score > 0 ? '看涨' : item.score < 0 ? '偏谨慎' : '观察', time:[...new Set(item.time)], quotes:[...new Set(item.quotes)] })).sort((a,b) => b.score - a.score || b.count - a.count);
+      $('#stamp').innerHTML = data ? `最后汇总<br>${new Date(data.generatedAt).toLocaleString('zh-CN')}` : '加载中…';
+      $('#stats').innerHTML = `<strong>${videos.length}</strong> 个视频 · <strong>${sectorSignals.length}</strong> 个板块信号`;
+      const groups = { '看涨':[], '偏谨慎':[], '观察':[] };
+      sectorSignals.forEach(item => (groups[item.direction] || groups['观察']).push(item));
+      const signalPreviewLimit = window.matchMedia('(max-width: 650px)').matches ? 2 : 3;
+      const signalRowHtml = item => `<div class="signal-row"><div><div class="signal-sector">${escapeHtml(item.sector)}</div><div class="signal-meta">${item.count} 段观点${item.time.length ? ' · ' + escapeHtml(item.time.join(' / ')) : ''}</div><div class="signal-quote">${escapeHtml(item.quotes[0] || '仅提及板块，未找到完整判断。')}</div></div></div>`;
+      const colHtml = (title, cls, list) => {
+        if (!list.length) return `<div class="signal-col ${cls}"><div class="signal-col-head"><span class="signal-col-title">${title}</span><span class="signal-col-count">0</span></div><div class="signal-row"><div class="signal-meta">无</div></div></div>`;
+        const preview = list.slice(0, signalPreviewLimit);
+        const remainder = list.slice(signalPreviewLimit);
+        const more = remainder.length ? `<details class="signal-more"${signalPreviewLimit === 3 ? ' open' : ''}><summary>查看其余 ${remainder.length} 个${title}板块</summary>${remainder.map(signalRowHtml).join('')}</details>` : '';
+        return `<div class="signal-col ${cls}"><div class="signal-col-head"><span class="signal-col-title">${title}</span><span class="signal-col-count">${list.length}</span></div>${preview.map(signalRowHtml).join('')}${more}</div>`;
+      };
+      $('#signals').innerHTML = sectorSignals.length ? `${colHtml('看涨','',groups['看涨'])}${colHtml('偏谨慎','caution',groups['偏谨慎'])}${colHtml('观察','watch',groups['观察'])}` : '<p class="empty">暂无可识别的板块信号。</p>';
+      const getVideoDirections = (video) => [...new Set((video.analysis.sectorViews || []).map(item => item.direction))];
+      const videoMatches = (video) => { const directions = getVideoDirections(video); const corpus = `${video.name} ${video.transcript} ${(video.analysis.stocks || []).join(' ')}`.toLowerCase(); return (filter === 'all' || directions.includes(filter)) && corpus.includes(keyword.toLowerCase()); };
+      const grouped = new Map();
+      videos.filter(videoMatches).forEach(video => grouped.set(video.date, [...(grouped.get(video.date) || []), video]));
+      const videoCount = videos.filter(videoMatches).length;
+      $('#result-status').textContent = keyword || filter !== 'all' ? `已显示 ${videoCount} 个匹配视频` : `共 ${videoCount} 个视频`;
+      $('#timeline').innerHTML = grouped.size ? [...grouped].map(([date, items]) => `<section class="day"><div class="date">${escapeHtml(date)}<small>${items.length} 个视频</small></div><div class="videos">${items.map(video => { const views = video.analysis.sectorViews || []; const tags = views.map(v => `<span class="tag ${directionClass(v.direction)}">${escapeHtml(v.sector)} · ${v.direction}${v.time.length ? ' · ' + escapeHtml(v.time.join('/')) : ''}</span>`).join('') || '<span class="tag watch">未识别板块方向</span>'; const quotes = (video.summary && video.summary.length) ? video.summary : (video.analysis.relevant || []).slice(0, 6); const stockText = (video.analysis.stocks || []).length ? `个股/代码：${video.analysis.stocks.join('、')}` : '未识别明确个股代码'; return `<article class="video"><div class="video-top"><div class="video-title"><div><h3>${escapeHtml(video.name)}</h3><p class="video-source">${escapeHtml(stockText)}</p></div><a class="video-link" href="../videos/${encodeURIComponent(video.name)}" title="打开原始视频：${escapeHtml(video.name)}">原视频 ↗</a></div><div class="tag-row">${tags}</div></div><div class="summary"><p class="summary-label">提炼信息</p><ul class="quote-list">${quotes.length ? quotes.map(q => `<li>${escapeHtml(q)}</li>`).join('') : '<li>未自动提炼到明确的投资表达。</li>'}</ul></div><details data-video-id="${escapeHtml(video.id)}"><summary>展开视频原文</summary><div class="transcript"></div></details></article>`; }).join('')}</div></section>`).join('') : '<p class="empty">没有匹配的视频。</p>';
+    }
+
+    $('#tabs').addEventListener('click', event => { const button = event.target.closest('[data-filter]'); if (!button) return; filter = button.dataset.filter; document.querySelectorAll('.tab').forEach(tab => { const active = tab === button; tab.classList.toggle('active', active); tab.setAttribute('aria-pressed', String(active)); }); render(); });
+    $('#search').addEventListener('input', event => { clearTimeout(searchTimer); const value = event.target.value.trim(); searchTimer = setTimeout(() => { keyword = value; render(); }, 250); });
+    $('#timeline').addEventListener('toggle', event => { const details = event.target; if (!details.open || !details.matches('details[data-video-id]')) return; const transcript = details.querySelector('.transcript'); if (transcript.textContent) return; transcript.textContent = videoById.get(details.dataset.videoId)?.transcript || '原文暂不可用。'; }, true);
+
+    // 数据外置：运行时 fetch data.json
+    async function loadData() {
+      const res = await fetch(`data.json?t=${Date.now()}`, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`data.json HTTP ${res.status}`);
+      return res.json();
+    }
+
+    // 轮询热更新：检测到 data.json 变化就自动重绘，无需刷新页面
+    const POLL_INTERVAL = 15000;
+    let lastSig = null;
+    const toast = document.createElement('div');
+    toast.style.cssText = 'position:fixed;right:16px;bottom:16px;background:#152520;color:#fff;padding:12px 16px;border-radius:10px;font:600 14px ui-sans-serif,"PingFang SC",sans-serif;box-shadow:0 8px 24px rgba(0,0,0,.25);opacity:0;transition:opacity .3s;pointer-events:none;z-index:999';
+    toast.textContent = '🔄 已更新到最新数据';
+    document.body.appendChild(toast);
+    const flashToast = () => { toast.style.opacity = '1'; setTimeout(() => toast.style.opacity = '0', 2500); };
+
+    async function poll() {
+      try {
+        const data = await loadData();
+        const sig = `${data.generatedAt}|${(data.videos || []).length}`;
+        const isFirst = lastSig === null;
+        const changed = !isFirst && sig !== lastSig;
+        if (isFirst || changed) {
+          currentData = data;
+          lastSig = sig;
+          render();
+          if (changed) flashToast();
+        }
+      } catch (error) {
+        if (lastSig === null) $('#timeline').innerHTML = `<p class="empty">加载数据失败：${escapeHtml(error.message)}<br>请通过 HTTP 打开本页（npm run open），直接双击 file:// 无法读取 data.json。</p>`;
+      }
+    }
+    poll();
+    setInterval(poll, POLL_INTERVAL);
+  </script>
+</body>
+</html>

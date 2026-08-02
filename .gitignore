@@ -1,0 +1,21 @@
+# 环境与密钥
+.env
+
+# 系统文件
+.DS_Store
+
+# 依赖
+node_modules/
+
+# 本地数据与生成物
+data/
+uploads/
+dist/
+videos/
+audio/
+transcripts/
+reports/
+logs/
+
+# 本地工具文件
+.zcode/

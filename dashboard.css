@@ -1,0 +1,1810 @@
+    :root {
+      --ink: oklch(0.25 0.018 166);
+      --ink-soft: oklch(0.39 0.015 166);
+      --muted: oklch(0.53 0.014 166);
+      --paper: oklch(0.965 0.008 101);
+      --paper-deep: oklch(0.935 0.012 101);
+      --surface: oklch(0.988 0.004 101);
+      --line: oklch(0.84 0.012 122);
+      --line-strong: oklch(0.7 0.018 150);
+      --green: oklch(0.43 0.09 166);
+      --green-bright: oklch(0.72 0.105 155);
+      --green-wash: oklch(0.92 0.035 155);
+      --amber: oklch(0.56 0.105 76);
+      --amber-wash: oklch(0.93 0.045 82);
+      --red: oklch(0.5 0.13 29);
+      --red-wash: oklch(0.93 0.04 27);
+      --nav: oklch(0.205 0.028 166);
+      --nav-soft: oklch(0.31 0.035 166);
+      --space-xs: 4px;
+      --space-sm: 8px;
+      --space-md: 12px;
+      --space-lg: 16px;
+      --space-xl: 24px;
+      --space-2xl: 32px;
+      --space-3xl: 48px;
+      --radius-sm: 8px;
+      --radius-md: 14px;
+      --shadow-dialog: 0 28px 80px oklch(0.2 0.02 166 / 0.28);
+      font-synthesis: none;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      min-width: 320px;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 78% 4%, oklch(0.91 0.025 155 / 0.46), transparent 26rem),
+        var(--paper);
+      font: 400 15px/1.62 "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    }
+    button, input, select, textarea { font: inherit; }
+    button, a { -webkit-tap-highlight-color: transparent; }
+    button { color: inherit; }
+    a { color: var(--green); text-underline-offset: 3px; }
+    h1, h2, h3, p { margin: 0; }
+    h1, h2, .display {
+      font-family: "Kaiti SC", "STKaiti", "FZKai-Z03", serif;
+      font-weight: 700;
+    }
+    h1 { font-size: 2rem; line-height: 1.12; letter-spacing: -0.04em; }
+    h2 { font-size: 1.5rem; line-height: 1.25; letter-spacing: -0.03em; }
+    h3 { font-size: 1rem; line-height: 1.35; }
+    .muted { color: var(--muted); }
+    /* A股惯例：红涨绿跌 —— 通用涨跌色，可加在任意数值元素上 */
+    .positive { color: oklch(0.5 0.13 29); }   /* 涨 / 盈利 → 红 */
+    .negative { color: oklch(0.5 0.13 150); }  /* 跌 / 亏损 → 绿 */
+    .empty {
+      display: grid;
+      gap: var(--space-sm);
+      justify-items: start;
+      padding: var(--space-2xl) 0;
+      color: var(--muted);
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+    }
+    .empty strong { color: var(--ink); font-size: 1rem; }
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+    :focus-visible {
+      outline: 3px solid color-mix(in oklch, var(--green) 64%, var(--surface));
+      outline-offset: 3px;
+    }
+
+    .app-shell {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 248px minmax(0, 1fr);
+    }
+    .sidebar {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-xl);
+      padding: var(--space-xl) var(--space-lg);
+      color: oklch(0.91 0.012 145);
+      background: var(--nav);
+      border-right: 1px solid oklch(0.38 0.025 166);
+      z-index: 10;
+    }
+    .brand {
+      display: grid;
+      grid-template-columns: 38px 1fr;
+      gap: var(--space-md);
+      align-items: center;
+      padding: 0 var(--space-sm);
+    }
+    .brand-mark {
+      width: 38px;
+      aspect-ratio: 1;
+      display: grid;
+      place-items: center;
+      border: 1px solid oklch(0.61 0.08 156);
+      border-radius: 50%;
+      color: var(--green-bright);
+      font: 700 20px/1 "Kaiti SC", "STKaiti", serif;
+    }
+    .brand strong { display: block; color: oklch(0.98 0.006 150); font-size: 14px; letter-spacing: .04em; }
+    .brand span { display: block; margin-top: 2px; color: oklch(0.69 0.02 155); font-size: 10px; letter-spacing: .14em; }
+    .nav {
+      display: grid;
+      gap: var(--space-xs);
+    }
+    .nav-group-label {
+      margin: var(--space-lg) 12px var(--space-xs);
+      color: oklch(0.57 0.02 155);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .12em;
+    }
+    .nav-group-label:first-child { margin-top: 0; }
+    .nav-button {
+      appearance: none;
+      width: 100%;
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+      gap: var(--space-md);
+      border: 0;
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+      color: oklch(0.75 0.016 155);
+      background: transparent;
+      text-align: left;
+      cursor: pointer;
+      transition: color 160ms ease, background 160ms ease, transform 160ms ease;
+    }
+    .nav-button:hover { color: oklch(0.98 0.005 150); background: oklch(0.29 0.03 166); transform: translateX(2px); }
+    .nav-button.active { color: oklch(0.98 0.005 150); background: var(--nav-soft); }
+    .nav-icon {
+      width: 23px;
+      color: var(--green-bright);
+      font: 700 12px/1 "Avenir Next", sans-serif;
+      letter-spacing: .04em;
+      text-align: center;
+    }
+    .sidebar-foot {
+      margin-top: auto;
+      padding: var(--space-lg) var(--space-sm) 0;
+      border-top: 1px solid oklch(0.38 0.025 166);
+      color: oklch(0.64 0.016 155);
+      font-size: 11px;
+      line-height: 1.6;
+    }
+    .sidebar-foot a { color: oklch(0.8 0.06 155); }
+
+    .workspace { min-width: 0; }
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 8;
+      min-height: 68px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-lg);
+      padding: 12px clamp(20px, 4vw, 52px);
+      background: color-mix(in oklch, var(--paper) 90%, transparent);
+      border-bottom: 1px solid var(--line);
+      backdrop-filter: blur(12px);
+    }
+    .breadcrumb { color: var(--muted); font-size: 12px; }
+    .breadcrumb strong { color: var(--ink); font-size: 14px; }
+    .top-actions { display: flex; align-items: center; gap: var(--space-sm); }
+    .sync-state { color: var(--muted); font-size: 11px; }
+
+    .content {
+      width: min(1380px, 100%);
+      padding: clamp(28px, 4vw, 56px) clamp(20px, 4vw, 52px) 88px;
+    }
+    .page[hidden] { display: none; }
+    .page { animation: enter 360ms cubic-bezier(.22, 1, .36, 1) both; }
+    @keyframes enter {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .page-heading {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: var(--space-xl);
+      margin-bottom: var(--space-2xl);
+    }
+    .page-heading p { max-width: 68ch; margin-top: var(--space-sm); color: var(--muted); }
+    .heading-actions { display: flex; gap: var(--space-sm); flex-shrink: 0; }
+
+    .button {
+      appearance: none;
+      min-height: 42px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-sm);
+      border: 1px solid var(--line-strong);
+      border-radius: 999px;
+      padding: 8px 15px;
+      color: var(--ink);
+      background: transparent;
+      text-decoration: none;
+      cursor: pointer;
+      transition: background 160ms ease, color 160ms ease, transform 160ms ease;
+    }
+    .button:hover { background: var(--paper-deep); transform: translateY(-1px); }
+    .button.primary { color: var(--surface); background: var(--green); border-color: var(--green); }
+    .button.primary:hover { background: oklch(0.37 0.085 166); }
+    .button.ghost { border-color: transparent; color: var(--muted); }
+    .button.danger { color: var(--red); border-color: color-mix(in oklch, var(--red) 42%, var(--line)); }
+    .button.small { min-height: 34px; padding: 5px 11px; font-size: 12px; }
+    .button:disabled { opacity: .55; cursor: wait; transform: none; }
+    .button[hidden] { display: none; }
+
+    .decision-brief {
+      position: relative;
+      overflow: hidden;
+      display: grid;
+      grid-template-columns: minmax(0, 1.45fr) minmax(260px, .55fr);
+      gap: var(--space-2xl);
+      min-height: 258px;
+      padding: clamp(24px, 4vw, 46px);
+      color: oklch(0.94 0.01 150);
+      background: var(--nav);
+      border-radius: var(--radius-md);
+    }
+    .decision-brief::after {
+      content: "决";
+      position: absolute;
+      right: -18px;
+      bottom: -68px;
+      color: oklch(0.38 0.045 166 / .42);
+      font: 700 210px/1 "Kaiti SC", "STKaiti", serif;
+      pointer-events: none;
+    }
+    .decision-kicker { color: var(--green-bright); font-size: 11px; font-weight: 700; letter-spacing: .16em; }
+    .decision-brief h2 { max-width: 17ch; margin-top: var(--space-sm); color: oklch(0.985 0.004 145); font-size: clamp(2rem, 4vw, 3.5rem); }
+    .decision-strategy { max-width: 66ch; margin-top: var(--space-lg); color: oklch(0.78 0.018 155); }
+    .decision-meta {
+      align-self: end;
+      position: relative;
+      z-index: 1;
+      display: grid;
+      gap: var(--space-md);
+      padding-top: var(--space-lg);
+      border-top: 1px solid oklch(0.42 0.035 166);
+    }
+    .decision-meta-row { display: flex; justify-content: space-between; gap: var(--space-md); }
+    .decision-meta-row span { color: oklch(0.66 0.018 155); }
+    .decision-meta-row strong { color: oklch(0.96 0.006 150); }
+
+    .metric-strip {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      margin: var(--space-2xl) 0 var(--space-3xl);
+      border-top: 1px solid var(--line-strong);
+      border-bottom: 1px solid var(--line);
+    }
+    .metric {
+      min-width: 0;
+      padding: var(--space-xl) var(--space-lg);
+    }
+    .metric + .metric { border-left: 1px solid var(--line); }
+    .metric-label { color: var(--muted); font-size: 11px; }
+    .metric-value { margin-top: 5px; font: 700 1.45rem/1.25 "Avenir Next", "PingFang SC", sans-serif; letter-spacing: -.03em; }
+    /* A股惯例：红涨绿跌 —— 盈利/上涨用红，亏损/下跌用绿 */
+    .metric-value.negative { color: oklch(0.5 0.13 150); }
+    .metric-value.positive { color: oklch(0.5 0.13 29); }
+
+    .overview-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(290px, .8fr);
+      gap: clamp(28px, 4vw, 52px);
+      align-items: start;
+    }
+    .overview-grid > * { min-width: 0; }
+    .section-block + .section-block { margin-top: var(--space-3xl); }
+    .section-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: var(--space-lg);
+      padding-bottom: var(--space-md);
+      border-bottom: 1px solid var(--line-strong);
+    }
+    .section-head small { color: var(--muted); }
+    .judgment-columns {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--space-xl);
+      margin-top: var(--space-lg);
+    }
+    .judgment-column h3 { display: flex; align-items: center; gap: var(--space-sm); }
+    .tone-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
+    .tone-dot.risk { background: var(--red); }
+    .plain-list { margin: var(--space-md) 0 0; padding: 0; list-style: none; }
+    .plain-list li { padding: 9px 0; border-top: 1px dotted var(--line); }
+    .plain-list li:first-child { border-top: 0; }
+
+    .research-ledger { margin-top: var(--space-lg); }
+    .evidence-row {
+      display: grid;
+      grid-template-columns: 112px minmax(0, 1fr) 54px;
+      gap: var(--space-md);
+      align-items: center;
+      min-height: 46px;
+      border-bottom: 1px solid var(--line);
+    }
+    .evidence-track { height: 4px; background: var(--paper-deep); overflow: hidden; }
+    .evidence-fill { height: 100%; background: var(--green); transform-origin: left; }
+    .evidence-count { text-align: right; font: 700 13px "Avenir Next", sans-serif; }
+    .completeness {
+      display: grid;
+      grid-template-columns: 92px 1fr;
+      gap: var(--space-lg);
+      align-items: center;
+      padding: var(--space-xl) 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .completeness-score { font: 700 2.15rem/1 "Avenir Next", sans-serif; color: var(--green); }
+    .completeness-checks { display: flex; flex-wrap: wrap; gap: 6px; }
+    .check-chip { padding: 3px 8px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 11px; }
+    .check-chip.ready { color: var(--green); background: var(--green-wash); border-color: color-mix(in oklch, var(--green) 24%, var(--line)); }
+
+    .review-intro {
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(260px, .65fr);
+      gap: clamp(32px, 6vw, 88px);
+      align-items: end;
+      padding: clamp(28px, 5vw, 64px) 0 clamp(32px, 5vw, 72px);
+      border-top: 1px solid var(--line-strong);
+      border-bottom: 1px solid var(--line-strong);
+    }
+    .review-eyebrow {
+      color: var(--green);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .08em;
+    }
+    .review-intro h2 {
+      max-width: 15ch;
+      margin-top: var(--space-md);
+      font-size: 4.2rem;
+      line-height: 1.04;
+      letter-spacing: -.055em;
+    }
+    .review-intro-copy {
+      max-width: 58ch;
+      margin-top: var(--space-xl);
+      color: var(--ink-soft);
+      font-size: 1.05rem;
+    }
+    .review-intro-actions { display: flex; align-items: center; gap: var(--space-lg); margin-top: var(--space-2xl); }
+    .review-intro-actions small { color: var(--muted); }
+    .review-snapshot { display: grid; border-top: 1px solid var(--line-strong); }
+    .review-snapshot-row {
+      display: flex;
+      justify-content: space-between;
+      gap: var(--space-lg);
+      padding: var(--space-lg) 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .review-snapshot-row span { color: var(--muted); }
+    .review-snapshot-row strong { text-align: right; font-variant-numeric: tabular-nums; }
+    /* 非交易日提示条（AI 日报页）：休市说明，不引导生成日报 */
+    .trading-day-notice {
+      margin: var(--space-lg) 0 0;
+      padding: var(--space-md) var(--space-lg);
+      border: 1px solid var(--line-strong);
+      border-left: 3px solid var(--green);
+      border-radius: 10px;
+      color: var(--ink-soft);
+      font-size: 13px;
+      line-height: 1.6;
+      background: color-mix(in oklch, var(--green-wash) 30%, transparent);
+    }
+    .review-preview {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: clamp(24px, 4vw, 56px);
+      margin: 0;
+      padding: var(--space-3xl) 0 0;
+      list-style: none;
+      counter-reset: review-step;
+    }
+    .review-preview li { counter-increment: review-step; }
+    .review-preview li::before {
+      content: "0" counter(review-step);
+      display: block;
+      margin-bottom: var(--space-lg);
+      color: var(--green);
+      font: 700 12px/1 "Avenir Next", sans-serif;
+      letter-spacing: .12em;
+    }
+    .review-preview h3 { font-size: 1.08rem; }
+    .review-preview p { max-width: 34ch; margin-top: var(--space-sm); color: var(--muted); }
+
+    .review-masthead {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: var(--space-2xl);
+      padding-bottom: var(--space-2xl);
+      border-bottom: 1px solid var(--line-strong);
+    }
+    .review-masthead h2 { margin-top: var(--space-sm); font-size: 2.4rem; }
+    .review-masthead-copy { max-width: 54ch; color: var(--muted); text-align: right; }
+    .review-progress {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      margin: var(--space-2xl) 0 var(--space-3xl);
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+    }
+    .review-progress-step {
+      min-width: 0;
+      display: grid;
+      grid-template-columns: 34px minmax(0, 1fr);
+      gap: var(--space-md);
+      align-items: center;
+      min-height: 82px;
+      padding: var(--space-md) var(--space-lg);
+      color: var(--muted);
+    }
+    .review-progress-step + .review-progress-step { border-left: 1px solid var(--line); }
+    .review-progress-step.current { color: var(--ink); background: var(--surface); }
+    .review-progress-step.finished { color: var(--green); }
+    .review-progress-number {
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border: 1px solid currentColor;
+      border-radius: 50%;
+      font: 700 12px/1 "Avenir Next", sans-serif;
+    }
+    .review-progress-step strong { display: block; color: inherit; }
+    .review-progress-step small { display: block; margin-top: 2px; color: var(--muted); }
+
+    .review-step-section { max-width: 1020px; }
+    .review-step-heading {
+      display: flex;
+      justify-content: space-between;
+      gap: var(--space-2xl);
+      align-items: start;
+      margin-bottom: var(--space-xl);
+    }
+    .review-step-heading h2 { font-size: 1.75rem; }
+    .review-step-heading p { max-width: 58ch; margin-top: var(--space-sm); color: var(--muted); }
+    .review-quality {
+      flex: 0 0 auto;
+      display: grid;
+      justify-items: end;
+      gap: var(--space-xs);
+    }
+    .review-quality strong { color: var(--green); font: 700 2rem/1 "Avenir Next", sans-serif; }
+    .review-quality span { color: var(--muted); font-size: 11px; }
+    .review-data-list, .review-action-list { border-top: 1px solid var(--line-strong); }
+    .review-data-row {
+      display: grid;
+      grid-template-columns: 42px minmax(0, 1fr) minmax(96px, auto) auto;
+      gap: var(--space-lg);
+      align-items: center;
+      min-height: 82px;
+      padding: var(--space-md) 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .review-data-mark {
+      width: 30px;
+      height: 30px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--line-strong);
+      border-radius: 50%;
+      color: var(--muted);
+      font-weight: 700;
+    }
+    .review-data-mark.ready { color: var(--green); border-color: var(--green); background: var(--green-wash); }
+    .review-data-copy strong { display: block; }
+    .review-data-copy span { display: block; margin-top: 3px; color: var(--muted); }
+    .review-data-score { color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
+    .review-data-score strong { color: var(--ink); }
+    .review-step-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-xl);
+      margin-top: var(--space-2xl);
+    }
+    .review-step-actions p { max-width: 58ch; color: var(--muted); }
+
+    .review-action-row {
+      display: grid;
+      grid-template-columns: 34px minmax(0, 1fr);
+      gap: var(--space-lg);
+      padding: var(--space-xl) 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .review-action-number {
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      color: var(--surface);
+      background: var(--amber);
+      font: 700 12px/1 "Avenir Next", sans-serif;
+    }
+    .review-action-row[data-tone="risk"] .review-action-number { background: var(--red); }
+    .review-action-row[data-tone="good"] .review-action-number { background: var(--green); }
+    .review-action-row.resolved .review-action-number { background: var(--green); }
+    .review-action-head {
+      display: flex;
+      align-items: start;
+      justify-content: space-between;
+      gap: var(--space-xl);
+    }
+    .review-action-head h3 { font-size: 1.1rem; }
+    .review-action-source { margin-top: 4px; color: var(--muted); font-size: 12px; }
+    .review-action-detail { max-width: 72ch; margin-top: var(--space-md); color: var(--ink-soft); }
+    .review-task-controls { display: flex; flex-wrap: wrap; gap: var(--space-sm); flex-shrink: 0; }
+    .review-choice {
+      min-height: 36px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 6px 12px;
+      color: var(--muted);
+      background: transparent;
+      cursor: pointer;
+    }
+    .review-choice:hover { color: var(--ink); border-color: var(--line-strong); }
+    .review-choice.active { color: var(--surface); background: var(--green); border-color: var(--green); }
+    .review-choice[data-task-status="deferred"].active { color: var(--ink); background: var(--amber-wash); border-color: var(--amber); }
+    .review-choice[data-task-status="ignored"].active { color: var(--ink-soft); background: var(--paper-deep); border-color: var(--line-strong); }
+    .review-task-note {
+      width: 100%;
+      min-height: 44px;
+      margin-top: var(--space-lg);
+      padding: 10px 12px;
+      color: var(--ink);
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      resize: vertical;
+    }
+    .review-no-actions {
+      padding: var(--space-2xl) 0;
+      color: var(--ink-soft);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .review-report-sheet {
+      display: grid;
+      gap: var(--space-xl);
+      padding: var(--space-xl) 0 var(--space-2xl);
+      border-top: 1px solid var(--line-strong);
+      border-bottom: 1px solid var(--line);
+    }
+    .review-report-head { display: flex; justify-content: space-between; gap: var(--space-xl); align-items: start; }
+    .review-report-head p { margin-top: var(--space-xs); color: var(--muted); }
+    .review-report-body { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-lg) var(--space-2xl); }
+    .review-report-body div { padding-top: var(--space-md); border-top: 1px dotted var(--line); }
+    .review-report-body span { display: block; color: var(--muted); font-size: 11px; }
+    .review-report-body strong { display: block; margin-top: var(--space-xs); font-weight: 500; }
+    .review-summary-field { display: grid; gap: var(--space-sm); margin-top: var(--space-2xl); }
+    .review-summary-field label { font-weight: 700; }
+    .review-summary-field small { color: var(--muted); }
+    .review-summary-field textarea {
+      min-height: 96px;
+      padding: 12px;
+      color: var(--ink);
+      background: var(--surface);
+      border: 1px solid var(--line-strong);
+      border-radius: var(--radius-sm);
+      resize: vertical;
+    }
+
+    .review-complete {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(280px, .7fr);
+      gap: clamp(36px, 7vw, 96px);
+      padding: clamp(40px, 7vw, 88px) 0;
+      border-top: 1px solid var(--line-strong);
+      border-bottom: 1px solid var(--line-strong);
+    }
+    .review-complete-mark {
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--green);
+      border-radius: 50%;
+      color: var(--green);
+      font-size: 20px;
+    }
+    .review-complete h2 { max-width: 14ch; margin-top: var(--space-xl); font-size: 4rem; line-height: 1.02; }
+    .review-complete-copy { max-width: 58ch; margin-top: var(--space-xl); color: var(--ink-soft); }
+    .review-complete-actions { display: flex; flex-wrap: wrap; gap: var(--space-sm); margin-top: var(--space-2xl); }
+    .review-weekly { align-self: end; border-top: 1px solid var(--line-strong); }
+    .review-weekly h3 { padding: var(--space-lg) 0; border-bottom: 1px solid var(--line); }
+    .review-weekly-row { display: flex; justify-content: space-between; gap: var(--space-xl); padding: var(--space-md) 0; border-bottom: 1px solid var(--line); }
+    .review-weekly-row span { color: var(--muted); }
+    .review-complete-list { margin-top: var(--space-3xl); }
+    .review-complete-item { display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: var(--space-lg); padding: var(--space-lg) 0; border-bottom: 1px solid var(--line); }
+    .review-complete-item span { color: var(--muted); }
+
+    .record-list { border-top: 1px solid var(--line-strong); }
+    .record-row {
+      display: grid;
+      grid-template-columns: minmax(180px, .7fr) minmax(250px, 1.45fr) minmax(140px, .55fr) auto;
+      gap: var(--space-xl);
+      align-items: start;
+      padding: var(--space-xl) 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .record-row.compact { grid-template-columns: minmax(150px, .7fr) minmax(240px, 1.5fr) auto; }
+    .record-row.row-warning { border-left: 3px solid var(--amber); padding-left: var(--space-lg); }
+    .record-identity { min-width: 0; }
+    .record-identity h3 { font-size: 1.08rem; overflow-wrap: anywhere; }
+    .record-code { margin-top: 4px; color: var(--muted); font: 600 11px/1.4 "Avenir Next", sans-serif; letter-spacing: .06em; }
+    .record-copy { color: var(--ink-soft); }
+    .watch-price { margin-top: 6px; font: 600 13px/1.4 "Avenir Next", sans-serif; color: var(--ink); }
+    .watch-price::before { content: ''; display: inline-block; width: 6px; height: 6px; margin-right: 6px; border-radius: 50%; background: var(--green); vertical-align: 1px; }
+    .record-copy p + p { margin-top: var(--space-sm); }
+    .record-copy strong { color: var(--ink); }
+    .record-numbers { display: grid; gap: var(--space-sm); }
+    .record-numbers div { display: flex; justify-content: space-between; gap: var(--space-md); }
+    .record-numbers span { color: var(--muted); font-size: 12px; }
+    .record-actions { display: flex; gap: var(--space-xs); }
+
+    .holdings-guide {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-xl);
+      margin-bottom: var(--space-xl);
+      padding: var(--space-lg) 0;
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+    }
+    .holdings-guide.attention { background: color-mix(in oklch, var(--amber-wash) 56%, transparent); }
+    .holdings-guide > div { padding-left: var(--space-md); }
+    .holdings-guide strong { font-size: 13px; }
+    .holdings-guide p { margin-top: var(--space-xs); color: var(--muted); font-size: 12px; }
+    .fundamentals-sync {
+      display: flex;
+      align-items: center;
+      gap: var(--space-md);
+      margin-bottom: var(--space-xl);
+      padding: var(--space-md) 0;
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      color: var(--ink-soft);
+    }
+    .fundamentals-sync > span {
+      width: 10px;
+      height: 10px;
+      flex: 0 0 auto;
+      border: 1px solid var(--green);
+      border-radius: 50%;
+      animation: sync-pulse 1.1s ease-in-out infinite;
+    }
+    .fundamentals-sync strong { font-size: 13px; }
+    .fundamentals-sync p { color: var(--muted); font-size: 11px; }
+    @keyframes sync-pulse { 50% { opacity: .28; transform: scale(.72); } }
+    .portfolio-tabs {
+      display: flex;
+      gap: var(--space-sm);
+      margin: var(--space-lg) 0 var(--space-2xl);
+      padding-bottom: var(--space-sm);
+      overflow-x: auto;
+      scrollbar-color: var(--line-strong) transparent;
+    }
+    .portfolio-tab {
+      appearance: none;
+      flex: 0 0 auto;
+      min-width: 108px;
+      padding: 10px 16px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--ink-soft);
+      background: transparent;
+      cursor: pointer;
+      font: 600 12px/1.2 "Avenir Next", sans-serif;
+      transition: color 160ms ease, border-color 160ms ease, background 160ms ease, transform 160ms ease;
+    }
+    .portfolio-tab:hover { border-color: var(--green); color: var(--green); transform: translateY(-1px); }
+    .portfolio-tab.active { color: var(--surface); background: var(--green); border-color: var(--green); }
+    .portfolio-tab span { margin-left: 5px; opacity: .72; font-size: 10px; }
+    .holding-ledger { border-top: 1px solid var(--line-strong); }
+    .holding-sheet {
+      padding: var(--space-xl) 0 var(--space-2xl);
+      border-bottom: 1px solid var(--line-strong);
+    }
+    .holding-sheet.attention { background: color-mix(in oklch, var(--amber-wash) 34%, transparent); }
+    .holding-sheet-head {
+      display: grid;
+      grid-template-columns: minmax(210px, .72fr) minmax(300px, 1fr) auto;
+      gap: var(--space-xl);
+      align-items: center;
+      padding: 0 var(--space-md) var(--space-lg);
+    }
+    .holding-title { display: flex; align-items: center; gap: var(--space-md); min-width: 0; }
+    .holding-title > div:first-child { min-width: 0; }
+    .holding-title h2 { overflow-wrap: anywhere; font: 700 1.28rem/1.2 "PingFang SC", "Hiragino Sans GB", sans-serif; letter-spacing: -.025em; }
+    .holding-title h2 + span { display: block; margin-top: 3px; color: var(--muted); font: 600 11px/1.4 "Avenir Next", sans-serif; letter-spacing: .07em; }
+    .holding-status { display: flex; flex-wrap: wrap; gap: var(--space-xs); }
+    .holding-position {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(72px, 1fr));
+      gap: var(--space-xl);
+      margin: 0;
+    }
+    .holding-position div { min-width: 0; }
+    .holding-position dt { color: var(--muted); font-size: 10px; }
+    .holding-position dd { margin: 2px 0 0; font: 700 1rem/1.3 "Avenir Next", "PingFang SC", sans-serif; overflow-wrap: anywhere; }
+    /* 最新价下的浮盈/浮亏率小字：A 股习惯红涨绿跌 */
+    .holding-position .quote-sub {
+      display: block;
+      margin-top: 2px;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: .02em;
+    }
+    .holding-position .quote-sub.up { color: oklch(0.55 0.19 25); }
+    .holding-position .quote-sub.down { color: oklch(0.5 0.13 150); }
+    .holding-sheet-body {
+      display: grid;
+      grid-template-columns: minmax(300px, 1.05fr) minmax(420px, .95fr);
+      border-top: 1px solid var(--line);
+    }
+    .holding-thesis, .holding-fundamentals { min-width: 0; padding: var(--space-lg) var(--space-md) 0; }
+    .holding-fundamentals { border-left: 1px solid var(--line); }
+    .holding-section-head { display: flex; align-items: baseline; gap: var(--space-sm); min-width: 0; }
+    .holding-section-head > span { color: var(--green); font-size: 10px; font-weight: 700; letter-spacing: .08em; }
+    .holding-section-head > strong { font-size: 12px; }
+    .holding-section-head > small { margin-left: auto; color: var(--muted); font-size: 9px; }
+    .holding-thesis dl { display: grid; gap: var(--space-sm); margin: var(--space-md) 0 0; }
+    .holding-thesis dl div { display: grid; grid-template-columns: 68px minmax(0, 1fr); gap: var(--space-md); }
+    .holding-thesis dt { color: var(--muted); font-size: 11px; }
+    .holding-thesis dd { margin: 0; color: var(--ink-soft); line-height: 1.5; }
+    .fundamental-metrics {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: var(--space-md);
+      margin: var(--space-md) 0 0;
+    }
+    .fundamental-metrics div { min-width: 0; }
+    .fundamental-metrics dt { min-height: 30px; color: var(--muted); font-size: 10px; line-height: 1.4; }
+    .fundamental-metrics dd { margin: 2px 0 0; font: 700 .92rem/1.3 "Avenir Next", "PingFang SC", sans-serif; overflow-wrap: anywhere; }
+    .holding-fundamentals.is-missing { display: grid; align-content: start; gap: var(--space-md); }
+    .holding-fundamentals.is-missing p { color: var(--muted); font-size: 12px; }
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 26px;
+      padding: 3px 9px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--ink-soft);
+      background: var(--surface);
+      font-size: 11px;
+      white-space: nowrap;
+    }
+    .status-pill.risk { color: var(--red); background: var(--red-wash); border-color: color-mix(in oklch, var(--red) 22%, var(--line)); }
+    .status-pill.good { color: var(--green); background: var(--green-wash); border-color: color-mix(in oklch, var(--green) 22%, var(--line)); }
+    .status-pill.pending { color: var(--amber); background: var(--amber-wash); border-color: color-mix(in oklch, var(--amber) 22%, var(--line)); }
+    .star-rating { color: var(--amber); letter-spacing: .04em; white-space: nowrap; }
+
+    .account-editor {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-lg);
+      padding: var(--space-lg) 0;
+      border-bottom: 1px solid var(--line);
+      color: var(--muted);
+    }
+    .market-sheet {
+      display: grid;
+      grid-template-columns: minmax(180px, .55fr) minmax(0, 1.45fr);
+      gap: var(--space-2xl);
+      padding: var(--space-xl) 0 var(--space-2xl);
+      border-bottom: 1px solid var(--line);
+    }
+    .market-score { display: flex; gap: var(--space-lg); margin-top: var(--space-lg); }
+    .score-item span { display: block; color: var(--muted); font-size: 11px; }
+    .score-item strong { font: 700 1.25rem "Avenir Next", sans-serif; }
+    .market-rationale { display: grid; gap: var(--space-lg); }
+    .market-rationale dt { color: var(--muted); font-size: 11px; }
+    .market-rationale dd { margin: 3px 0 0; }
+    .metric-facts {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: var(--space-sm) var(--space-xl);
+      margin-top: var(--space-xl);
+    }
+    .metric-fact { padding-top: var(--space-sm); border-top: 1px solid var(--line); }
+    .metric-fact span { display: block; color: var(--muted); font-size: 10px; }
+    .metric-fact strong { display: block; margin-top: 3px; font-size: 13px; font-weight: 600; }
+    .gold-market-panel {
+      margin-bottom: var(--space-xl);
+      padding: var(--space-xl) 0 var(--space-2xl);
+      border-top: 2px solid var(--amber);
+      border-bottom: 1px solid var(--line);
+    }
+    .gold-market-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: var(--space-xl);
+      margin-bottom: var(--space-xl);
+    }
+    .gold-market-head h2 { font-size: 1.4rem; }
+    .gold-market-head p { margin-top: 4px; color: var(--muted); font-size: 11px; }
+    .gold-quote-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: var(--space-xl);
+    }
+    .gold-quote {
+      min-width: 0;
+      padding-left: var(--space-md);
+      border-left: 1px solid var(--line);
+    }
+    .gold-quote:first-child { padding-left: 0; border-left: 0; }
+    .gold-quote-name { color: var(--muted); font-size: 11px; }
+    .gold-quote-price { display: block; margin-top: 6px; font: 700 1.55rem/1 "Avenir Next", sans-serif; }
+    .gold-quote-meta { display: flex; gap: var(--space-sm); margin-top: 8px; font-size: 11px; }
+    .gold-market-source { margin-top: var(--space-xl); color: var(--muted); font-size: 11px; }
+    .gold-market-source a { color: inherit; text-decoration: underline; text-underline-offset: 3px; }
+
+    .decision-row {
+      display: grid;
+      grid-template-columns: 112px minmax(180px, .55fr) minmax(260px, 1.45fr) auto;
+      gap: var(--space-xl);
+      padding: var(--space-xl) 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .decision-date { color: var(--muted); font: 600 12px "Avenir Next", sans-serif; }
+    .decision-body { display: grid; gap: var(--space-md); }
+    .decision-body div { display: grid; grid-template-columns: 58px 1fr; gap: var(--space-sm); }
+    .decision-body dt { color: var(--muted); font-size: 11px; }
+    .decision-body dd { margin: 0; }
+    .decision-source { margin-top: var(--space-sm); color: var(--muted); font-size: 11px; }
+
+    /* 日报分析依据快照展开区 */
+    .decision-input-wrap { grid-column: 2 / -1; margin-top: var(--space-sm); }
+    .decision-input { border-top: 1px dashed var(--line); padding-top: var(--space-sm); }
+    .decision-input > summary,
+    .decision-input-raw summary { cursor: pointer; font-size: 12px; font-weight: 700; color: var(--green); }
+    .decision-input-sections { display: grid; gap: var(--space-lg); margin-top: var(--space-md); }
+    .decision-input-section h4 { margin-bottom: 6px; font-size: 12px; color: var(--muted); letter-spacing: .03em; }
+    .decision-input-rows { display: grid; gap: 4px; }
+    .decision-input-row { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: var(--space-sm); font-size: 12.5px; }
+    .decision-input-row dt { color: var(--muted); }
+    .decision-input-row dd { margin: 0; overflow-wrap: anywhere; }
+    .decision-input-items { display: grid; gap: 6px; }
+    .decision-input-item { padding: var(--space-sm) var(--space-md); border: 1px solid var(--line); border-radius: 8px; background: var(--paper); }
+    .decision-input-item > strong { display: block; margin-bottom: 4px; font-size: 12.5px; }
+    .decision-input-raw { margin-top: var(--space-md); }
+    .decision-input-raw pre {
+      margin: var(--space-sm) 0 0;
+      padding: var(--space-md);
+      background: rgba(0, 0, 0, .03);
+      border-radius: 8px;
+      font-family: "SF Mono", "Menlo", monospace;
+      font-size: 11px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 340px;
+      overflow-y: auto;
+    }
+
+    /* 板块 AI 参考分析展开区 */
+    .sector-analysis-wrap { grid-column: 2 / -1; margin-top: var(--space-sm); }
+    .sector-analysis-wrap .decision-input > summary small {
+      color: var(--muted);
+      font-weight: 500;
+      margin-left: var(--space-sm);
+    }
+    .sector-analysis-caption {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-md);
+      flex-wrap: wrap;
+      margin: var(--space-sm) 0 var(--space-md);
+      color: var(--muted);
+      font-size: 11px;
+    }
+    .sector-analysis-caption p { margin: 0; }
+    .sector-signals {
+      margin: 0;
+      padding-left: 18px;
+      display: grid;
+      gap: 2px;
+    }
+    .sector-signals li { margin: 0; }
+
+    .analyze-panel {
+      margin-bottom: var(--space-2xl);
+      padding: var(--space-lg) var(--space-xl);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--surface);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, .03);
+    }
+    .analyze-panel.running { border-color: var(--amber-wash); background: var(--amber-wash); }
+    .analyze-panel.done { border-color: var(--green-wash); }
+    .analyze-panel.failed { border-color: var(--red-wash); background: var(--red-wash); }
+    .analyze-panel-head {
+      display: flex;
+      align-items: center;
+      gap: var(--space-md);
+      flex-wrap: wrap;
+    }
+    .analyze-status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      background: var(--line-strong);
+      color: var(--ink);
+    }
+    .analyze-panel.running .analyze-status-pill { background: var(--amber); color: #fff; }
+    .analyze-panel.done .analyze-status-pill { background: var(--green); color: #fff; }
+    .analyze-panel.failed .analyze-status-pill { background: var(--red); color: #fff; }
+    .analyze-spinner {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      border: 2px solid rgba(255, 255, 255, .5);
+      border-top-color: #fff;
+      animation: analyze-spin .7s linear infinite;
+    }
+    @keyframes analyze-spin { to { transform: rotate(360deg); } }
+    .analyze-panel-head h2 {
+      margin: 0;
+      font-size: 1.1rem;
+    }
+    .analyze-meta {
+      margin-left: auto;
+      display: flex;
+      gap: var(--space-lg);
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .analyze-meta span strong { color: var(--ink); font-weight: 700; }
+    .analyze-progress-track {
+      margin-top: var(--space-md);
+      height: 6px;
+      border-radius: 999px;
+      background: var(--line-strong);
+      overflow: hidden;
+      position: relative;
+    }
+    .analyze-progress-bar {
+      position: absolute;
+      top: 0; left: 0; bottom: 0;
+      width: 40%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--amber), var(--green-bright));
+      animation: analyze-indeterminate 1.6s ease-in-out infinite;
+    }
+    @keyframes analyze-indeterminate {
+      0% { left: -40%; }
+      100% { left: 100%; }
+    }
+    .analyze-log {
+      margin-top: var(--space-md);
+      max-height: 168px;
+      overflow-y: auto;
+      padding: var(--space-sm) var(--space-md);
+      background: rgba(0, 0, 0, .03);
+      border-radius: 8px;
+      font-family: "SF Mono", "Menlo", monospace;
+      font-size: 11.5px;
+      line-height: 1.65;
+      color: var(--ink-soft);
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .analyze-log-empty { color: var(--muted); font-style: italic; }
+    .analyze-log-line { display: block; }
+    .analyze-log-line:last-child { color: var(--ink); font-weight: 600; }
+
+    /* 市场环境页：原始数据 + AI 分析结果 */
+    .market-panel {
+      margin-bottom: var(--space-xl);
+      padding: var(--space-xl);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--surface);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, .03);
+    }
+    .market-panel-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: var(--space-lg);
+      margin-bottom: var(--space-lg);
+    }
+    .market-panel-head h2 { font-size: 1.3rem; }
+    .market-panel-head p { margin-top: 4px; font-size: 11px; }
+    .market-metric-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: var(--space-lg);
+    }
+    .market-metric {
+      min-width: 0;
+      padding: var(--space-sm) var(--space-lg);
+      border-left: 1px solid var(--line);
+    }
+    .market-metric:first-child { padding-left: 0; border-left: 0; }
+    .market-metric-label {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .market-metric-label small { opacity: .75; }
+    .market-metric-value {
+      display: block;
+      margin-top: 6px;
+      font: 700 1.4rem/1.2 "Avenir Next", "PingFang SC", sans-serif;
+      overflow-wrap: anywhere;
+    }
+    .market-metric-meta {
+      display: block;
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+    .market-detail-list {
+      display: grid;
+      gap: var(--space-sm);
+      margin-top: var(--space-lg);
+      padding-top: var(--space-lg);
+      border-top: 1px dashed var(--line);
+    }
+    .market-detail-list div {
+      display: grid;
+      grid-template-columns: 96px minmax(0, 1fr);
+      gap: var(--space-md);
+    }
+    .market-detail-list dt { color: var(--muted); font-size: 11px; padding-top: 2px; }
+    .market-detail-list dd { margin: 0; }
+    .market-raw-json {
+      margin-top: var(--space-md);
+      color: var(--muted);
+    }
+    .market-raw-json summary { cursor: pointer; font-size: 11px; font-weight: 600; }
+    .market-raw-json pre {
+      margin-top: var(--space-sm);
+      padding: var(--space-md);
+      background: rgba(0, 0, 0, .03);
+      border-radius: 8px;
+      font-family: "SF Mono", "Menlo", monospace;
+      font-size: 11px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 320px;
+      overflow-y: auto;
+    }
+    .market-analysis-badges {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: var(--space-lg);
+    }
+    .market-analysis-badge {
+      padding: var(--space-lg);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--paper);
+      text-align: center;
+    }
+    .market-analysis-badge span {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .market-analysis-badge strong {
+      display: block;
+      margin-top: 6px;
+      font: 700 2rem/1 "Avenir Next", sans-serif;
+    }
+    .market-analysis-badge strong small { font-size: 12px; color: var(--muted); }
+    /* 数值高=红（热），低=绿（冷），沿用 A 股红涨绿跌惯例 */
+    .market-analysis-badge.risk { border-color: color-mix(in oklch, var(--red) 32%, var(--line)); background: var(--red-wash); }
+    .market-analysis-badge.risk strong { color: var(--red); }
+    .market-analysis-badge.good { border-color: color-mix(in oklch, var(--green) 30%, var(--line)); background: var(--green-wash); }
+    .market-analysis-badge.good strong { color: var(--green); }
+    .market-panel.is-empty .video-loading { padding: var(--space-xl) 0; }
+
+    .video-direction-board {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: var(--space-2xl);
+      margin-bottom: var(--space-3xl);
+    }
+    .video-direction-column {
+      min-width: 0;
+      padding-top: var(--space-lg);
+      border-top: 2px solid var(--line-strong);
+    }
+    .video-direction-column.good { border-color: var(--green); }
+    .video-direction-column.pending { border-color: var(--amber); }
+    .video-direction-column.risk { border-color: var(--red); }
+    .video-direction-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: var(--space-md);
+      padding-bottom: var(--space-md);
+      border-bottom: 1px solid var(--line);
+    }
+    .video-direction-head h2 { font-size: 1.75rem; }
+    .video-direction-head span { color: var(--muted); font: 600 11px/1 "Avenir Next", sans-serif; }
+    .video-signal-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-sm);
+      padding-top: var(--space-lg);
+    }
+    .video-signal {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-xs);
+      padding: 8px 14px;
+      border-radius: 999px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--ink);
+      transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+    }
+    .video-signal:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, .06);
+    }
+    .video-direction-column.good .video-signal { border-color: var(--green-wash); }
+    .video-direction-column.pending .video-signal { border-color: var(--amber-wash); }
+    .video-direction-column.risk .video-signal { border-color: var(--red-wash); }
+    .video-signal strong { font-size: 13px; font-weight: 600; }
+    .video-signal-count {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 18px;
+      height: 18px;
+      padding: 0 5px;
+      border-radius: 999px;
+      background: var(--line-strong);
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 700;
+    }
+    /* A股惯例：看多(涨)→红、看空(跌)→绿；此处只改数字徽章配色 */
+    .video-direction-column.good .video-signal-count { background: var(--red-wash); color: var(--red); }
+    .video-direction-column.pending .video-signal-count { background: var(--amber-wash); color: var(--amber); }
+    .video-direction-column.risk .video-signal-count { background: var(--green-wash); color: var(--green); }
+    .video-signal-empty {
+      width: 100%;
+      padding: var(--space-xl) 0;
+      color: var(--muted);
+      font-size: 12px;
+      text-align: center;
+    }
+    .video-timeline {
+      padding-top: var(--space-xl);
+      border-top: 1px solid var(--line-strong);
+    }
+    .video-date-rail {
+      display: flex;
+      gap: var(--space-sm);
+      margin: var(--space-lg) 0 var(--space-2xl);
+      padding-bottom: var(--space-sm);
+      overflow-x: auto;
+      scrollbar-color: var(--line-strong) transparent;
+    }
+    .video-date-tab {
+      appearance: none;
+      flex: 0 0 auto;
+      min-width: 112px;
+      padding: 10px 14px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--ink-soft);
+      background: transparent;
+      cursor: pointer;
+      font: 600 12px/1.2 "Avenir Next", sans-serif;
+      transition: color 160ms ease, border-color 160ms ease, background 160ms ease, transform 160ms ease;
+    }
+    .video-date-tab:hover { border-color: var(--green); color: var(--green); transform: translateY(-1px); }
+    .video-date-tab.active { color: var(--surface); background: var(--green); border-color: var(--green); }
+    .video-date-tab span { margin-left: 5px; opacity: .72; font-size: 10px; }
+    .video-day-heading {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: var(--space-lg);
+      padding-bottom: var(--space-md);
+      border-bottom: 1px solid var(--line-strong);
+    }
+    .video-day-heading p { color: var(--muted); font-size: 12px; }
+    .video-day-list { display: grid; }
+    .video-research-item {
+      display: grid;
+      grid-template-columns: minmax(0, .74fr) minmax(340px, 1.26fr);
+      gap: var(--space-3xl);
+      padding: var(--space-2xl) 0 var(--space-3xl);
+      border-bottom: 1px solid var(--line);
+    }
+    .video-research-summary { min-width: 0; }
+    .video-research-title {
+      display: flex;
+      align-items: start;
+      justify-content: space-between;
+      gap: var(--space-lg);
+      margin-bottom: var(--space-xl);
+    }
+    .video-research-title h3 { max-width: 32ch; font-size: 1.14rem; overflow-wrap: anywhere; }
+    .video-research-title .button { flex: 0 0 auto; }
+    .video-research-section h4 {
+      margin: 0 0 var(--space-md);
+      color: var(--muted);
+      font-size: 11px;
+      letter-spacing: .08em;
+    }
+    .video-viewpoints { margin: 0; padding-left: 20px; color: var(--ink-soft); }
+    .video-viewpoints li + li { margin-top: var(--space-sm); }
+    .video-transcript {
+      max-height: 380px;
+      overflow: auto;
+      padding: var(--space-lg);
+      color: var(--ink-soft);
+      background: var(--paper-deep);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      font-size: 13px;
+      line-height: 1.85;
+    }
+    .video-loading {
+      display: grid;
+      gap: var(--space-sm);
+      padding: var(--space-3xl) 0;
+      color: var(--muted);
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+    }
+
+    dialog {
+      width: min(720px, calc(100% - 32px));
+      max-height: min(86vh, 900px);
+      padding: 0;
+      color: var(--ink);
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-dialog);
+    }
+    dialog::backdrop { background: oklch(0.18 0.018 166 / .62); backdrop-filter: blur(3px); }
+    .dialog-shell { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; max-height: inherit; }
+    .dialog-head {
+      display: flex;
+      justify-content: space-between;
+      gap: var(--space-lg);
+      padding: var(--space-xl);
+      border-bottom: 1px solid var(--line);
+    }
+    .dialog-close {
+      width: 38px;
+      height: 38px;
+      border: 0;
+      border-radius: 50%;
+      background: var(--paper-deep);
+      cursor: pointer;
+    }
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--space-lg);
+      padding: var(--space-xl);
+      overflow: auto;
+    }
+    .field { display: grid; gap: 6px; align-content: start; }
+    .field.full { grid-column: 1 / -1; }
+    .field label { color: var(--ink-soft); font-size: 12px; font-weight: 600; }
+    .field small { color: var(--muted); font-size: 10px; }
+    .field input, .field select, .field textarea {
+      width: 100%;
+      min-height: 44px;
+      border: 1px solid var(--line-strong);
+      border-radius: var(--radius-sm);
+      padding: 9px 11px;
+      color: var(--ink);
+      background: var(--paper);
+    }
+    .field textarea { min-height: 94px; resize: vertical; line-height: 1.6; }
+    .sell-dialog { width: min(920px, calc(100% - 32px)); }
+    .sell-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.12fr) minmax(280px, .88fr);
+      min-height: 0;
+      overflow: auto;
+    }
+    .sell-fields {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--space-lg);
+      padding: var(--space-xl);
+      align-content: start;
+    }
+    .sell-fields .full { grid-column: 1 / -1; }
+    .sell-move-watch {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0;
+      cursor: pointer;
+      color: var(--ink);
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .sell-move-watch input {
+      width: 16px;
+      min-height: 16px;
+      height: 16px;
+      margin: 0;
+      accent-color: var(--green);
+    }
+    .sell-quantity-control { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-sm); }
+    .sell-quantity-control .button { min-height: 44px; }
+    .sell-help { color: var(--muted); font-size: 11px; line-height: 1.55; }
+    .sell-dialog-actions { align-items: center; justify-content: space-between; }
+    .sell-action-buttons { display: flex; gap: var(--space-sm); margin-left: auto; }
+    .sell-feedback {
+      display: flex;
+      align-items: center;
+      gap: var(--space-sm);
+      flex: 1 1 420px;
+      min-height: 44px;
+      max-width: 560px;
+      padding: 9px 12px;
+      color: var(--ink-soft);
+      background: var(--paper-deep);
+      border: 1px solid var(--line-strong);
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    .sell-feedback[hidden] { display: none; }
+    .sell-feedback[data-tone="warning"] {
+      color: oklch(0.38 0.07 70);
+      background: var(--amber-wash);
+      border-color: color-mix(in oklch, var(--amber) 38%, var(--line));
+    }
+    .sell-feedback[data-tone="error"] {
+      color: oklch(0.42 0.12 28);
+      background: var(--red-wash);
+      border-color: color-mix(in oklch, var(--red) 36%, var(--line));
+    }
+    .sell-feedback-mark {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 auto;
+      width: 22px;
+      height: 22px;
+      color: var(--surface);
+      background: var(--muted);
+      border-radius: 50%;
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .sell-feedback[data-tone="warning"] .sell-feedback-mark { background: var(--amber); }
+    .sell-feedback[data-tone="error"] .sell-feedback-mark { background: var(--red); }
+    .sell-preview {
+      display: grid;
+      gap: var(--space-xl);
+      align-content: start;
+      padding: var(--space-xl);
+      background: var(--paper-deep);
+      border-left: 1px solid var(--line);
+    }
+    .sell-holding-summary { display: grid; gap: var(--space-sm); padding-bottom: var(--space-lg); border-bottom: 1px solid var(--line); }
+    .sell-holding-summary h3 { font-size: 1.15rem; }
+    .sell-holding-meta { display: flex; flex-wrap: wrap; gap: var(--space-sm) var(--space-lg); color: var(--muted); font-size: 11px; }
+    .sell-calculation { display: grid; gap: var(--space-sm); margin: 0; }
+    .sell-calculation div { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-lg); }
+    .sell-calculation dt { color: var(--muted); font-size: 12px; }
+    .sell-calculation dd { margin: 0; font-variant-numeric: tabular-nums; font-weight: 650; }
+    .sell-calculation .sell-total { margin-top: var(--space-sm); padding-top: var(--space-md); border-top: 1px solid var(--line-strong); }
+    /* 卖出盈亏：盈利红、亏损绿（A股惯例） */
+    .sell-calculation .sell-result dd { color: oklch(0.5 0.13 29); font-size: 1.05rem; }
+    .sell-calculation .sell-result.negative dd { color: oklch(0.5 0.13 150); }
+    .sell-result-note { color: var(--muted); font-size: 11px; line-height: 1.6; }
+    .dialog-error {
+      margin: var(--space-lg) var(--space-xl) 0;
+      padding: 10px 14px;
+      color: oklch(0.96 0.008 28);
+      background: oklch(0.34 0.09 28);
+      border: 1px solid oklch(0.55 0.11 28);
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    .dialog-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: var(--space-sm);
+      padding: var(--space-lg) var(--space-xl);
+      border-top: 1px solid var(--line);
+    }
+    .confirm-copy { padding: var(--space-xl); color: var(--ink-soft); }
+
+    .toast {
+      position: fixed;
+      right: var(--space-xl);
+      bottom: var(--space-xl);
+      z-index: 30;
+      max-width: min(420px, calc(100% - 32px));
+      padding: 12px 16px;
+      color: oklch(0.96 0.008 150);
+      background: var(--nav);
+      border: 1px solid oklch(0.42 0.04 166);
+      border-radius: var(--radius-sm);
+      box-shadow: var(--shadow-dialog);
+      opacity: 0;
+      transform: translateY(10px);
+      pointer-events: none;
+      transition: opacity 180ms ease, transform 180ms ease;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .toast.error { background: oklch(0.34 0.09 28); border-color: oklch(0.55 0.11 28); }
+    .loading-line {
+      height: 2px;
+      position: fixed;
+      inset: 0 0 auto;
+      z-index: 50;
+      background: var(--green-bright);
+      transform: scaleX(0);
+      transform-origin: left;
+      transition: transform 220ms ease;
+    }
+    .loading-line.active { transform: scaleX(.72); }
+
+    .operation-loading {
+      display: flex;
+      align-items: center;
+      gap: var(--space-lg);
+      padding: var(--space-xl) 0;
+      border-block: 1px solid var(--line);
+    }
+    .operation-loading > span {
+      width: 12px;
+      height: 12px;
+      border: 2px solid var(--line-strong);
+      border-top-color: var(--green);
+      border-radius: 50%;
+      animation: analyze-spin .7s linear infinite;
+    }
+    .operation-loading p { margin-top: 2px; color: var(--muted); font-size: 12px; }
+    .operation-overview {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(100px, 150px)) minmax(240px, 1fr);
+      align-items: end;
+      gap: var(--space-xl);
+      padding: var(--space-xl) 0;
+      border-block: 1px solid var(--line-strong);
+    }
+    .operation-overview > div { display: grid; gap: 2px; }
+    .operation-overview span { color: var(--muted); font-size: 11px; }
+    .operation-overview strong { font: 700 1.75rem/1.1 "Avenir Next", sans-serif; font-variant-numeric: tabular-nums; }
+    .operation-overview strong.risk { color: var(--red); }
+    .operation-overview p { justify-self: end; max-width: 46ch; color: var(--muted); font-size: 11px; text-align: right; }
+    .operation-toolbar {
+      display: flex;
+      gap: var(--space-sm);
+      padding: var(--space-xl) 0 var(--space-lg);
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .operation-filter {
+      appearance: none;
+      min-height: 34px;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      flex: 0 0 auto;
+      padding: 5px 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--ink-soft);
+      background: transparent;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .operation-filter:hover { border-color: var(--line-strong); color: var(--ink); }
+    .operation-filter.active { color: oklch(0.965 0.008 150); border-color: var(--green); background: var(--green); }
+    .operation-filter span { min-width: 16px; font: 700 10px/1 "Avenir Next", sans-serif; text-align: center; }
+    .operation-ledger { border-top: 1px solid var(--line); }
+    .operation-row {
+      display: grid;
+      grid-template-columns: 82px 76px minmax(280px, 1fr) 76px;
+      gap: var(--space-xl);
+      align-items: start;
+      padding: var(--space-xl) var(--space-sm);
+      border-bottom: 1px solid var(--line);
+    }
+    .operation-row.failed { background: color-mix(in oklch, var(--red-wash) 58%, transparent); }
+    .operation-row.running { background: color-mix(in oklch, var(--amber-wash) 54%, transparent); }
+    .operation-time { display: grid; color: var(--muted); font-style: normal; font-variant-numeric: tabular-nums; }
+    .operation-time strong { color: var(--ink); font: 650 13px/1.35 "Avenir Next", sans-serif; }
+    .operation-time span { font-size: 10px; }
+    .operation-state {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding-top: 1px;
+      color: var(--ink-soft);
+      font-size: 11px;
+      font-weight: 650;
+    }
+    .operation-state > span { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
+    .operation-row.running .operation-state > span { background: var(--amber); animation: operation-pulse 1.5s ease-in-out infinite; }
+    .operation-row.failed .operation-state > span { background: var(--red); }
+    @keyframes operation-pulse { 50% { opacity: .35; transform: scale(.78); } }
+    .operation-main { min-width: 0; display: grid; gap: 5px; }
+    .operation-title { display: flex; align-items: baseline; gap: var(--space-md); }
+    .operation-title h2 { font: 700 1rem/1.35 "PingFang SC", "Hiragino Sans GB", sans-serif; letter-spacing: 0; }
+    .operation-title > span { color: var(--muted); font-size: 10px; white-space: nowrap; }
+    .operation-main > p { max-width: 72ch; color: var(--ink-soft); font-size: 12px; }
+    .operation-duration { display: grid; justify-items: end; gap: 2px; color: var(--muted); white-space: nowrap; }
+    .operation-duration span { font-size: 10px; }
+    .operation-duration strong { color: var(--ink); font: 650 12px/1.4 "Avenir Next", sans-serif; font-variant-numeric: tabular-nums; }
+    .operation-details { margin-top: var(--space-sm); }
+    .operation-details summary { width: max-content; color: var(--green); font-size: 11px; cursor: pointer; }
+    .operation-details pre {
+      max-height: 340px;
+      margin: var(--space-md) 0 0;
+      overflow: auto;
+      padding: var(--space-lg);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      color: var(--ink-soft);
+      background: var(--paper-deep);
+      font: 11px/1.7 "SF Mono", "Menlo", monospace;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    @media (max-width: 1100px) {
+      .market-metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .market-metric:nth-child(odd) { padding-left: 0; border-left: 0; }
+      .market-metric:nth-child(n + 3) { border-top: 1px solid var(--line); padding-top: var(--space-md); }
+      .market-analysis-badges { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .review-intro h2 { font-size: 3.35rem; }
+      .review-complete h2 { font-size: 3.35rem; }
+      .metric-strip { grid-template-columns: repeat(3, 1fr); }
+      .metric:nth-child(4) { border-left: 0; }
+      .metric:nth-child(n + 4) { border-top: 1px solid var(--line); }
+      .overview-grid { grid-template-columns: 1fr; }
+      .record-row { grid-template-columns: minmax(160px, .6fr) minmax(260px, 1.4fr) auto; }
+      .record-numbers { grid-column: 1 / -2; display: flex; flex-wrap: wrap; gap: var(--space-xl); }
+      .holding-sheet-head { grid-template-columns: minmax(200px, .75fr) minmax(280px, 1fr); }
+      .holding-sheet-head .record-actions { grid-column: 1 / -1; }
+      .holding-sheet-body { grid-template-columns: minmax(260px, .9fr) minmax(340px, 1.1fr); }
+      .fundamental-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .gold-quote-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .decision-row { grid-template-columns: 96px minmax(160px, .5fr) minmax(240px, 1.5fr); }
+      .decision-row .record-actions { grid-column: 2 / -1; justify-self: start; }
+      .video-direction-board { gap: var(--space-lg); }
+      .video-research-item { grid-template-columns: minmax(0, .8fr) minmax(300px, 1.2fr); gap: var(--space-2xl); }
+      .operation-overview { grid-template-columns: repeat(3, minmax(90px, 120px)) minmax(200px, 1fr); }
+      .operation-row { grid-template-columns: 76px 70px minmax(240px, 1fr) 70px; gap: var(--space-lg); }
+    }
+    @media (min-width: 1101px) {
+      .overview-grid .record-row {
+        grid-template-columns: minmax(124px, .55fr) minmax(0, 1.45fr);
+        gap: var(--space-lg) var(--space-xl);
+      }
+      .overview-grid .record-copy { min-width: 0; overflow-wrap: anywhere; }
+      .overview-grid .record-numbers {
+        grid-column: 1 / -1;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: var(--space-lg);
+        padding-top: var(--space-md);
+        border-top: 1px dotted var(--line);
+      }
+      .overview-grid .record-actions {
+        grid-column: 1 / -1;
+        justify-content: flex-end;
+      }
+      .overview-grid .decision-row {
+        grid-template-columns: 96px minmax(0, 1fr);
+        gap: var(--space-lg) var(--space-xl);
+      }
+      .overview-grid .decision-body {
+        grid-column: 1 / -1;
+        min-width: 0;
+      }
+      .overview-grid .decision-row .record-actions {
+        grid-column: 1 / -1;
+        justify-self: end;
+      }
+    }
+    @media (max-width: 820px) {
+      .holding-position { grid-template-columns: repeat(2, minmax(84px, 1fr)); }
+      .app-shell { display: block; }
+      .sidebar {
+        position: fixed;
+        inset: auto 0 0;
+        width: auto;
+        height: 70px;
+        display: block;
+        padding: 6px 8px max(6px, env(safe-area-inset-bottom));
+        border: 0;
+        border-top: 1px solid oklch(0.38 0.025 166);
+      }
+      .brand, .sidebar-foot, .nav-group-label { display: none; }
+      .nav {
+        height: 100%;
+        display: flex;
+        gap: 2px;
+        overflow-x: auto;
+        scrollbar-width: none;
+      }
+      .nav-button {
+        min-width: 72px;
+        height: 58px;
+        min-height: 0;
+        flex: 1 0 72px;
+        flex-direction: column;
+        justify-content: center;
+        gap: 3px;
+        padding: 5px 4px;
+        font-size: 10px;
+        text-align: center;
+      }
+      .nav-button:hover { transform: none; }
+      .nav-icon { width: auto; }
+      .topbar { min-height: 58px; padding: 9px 16px; }
+      .sync-state { display: none; }
+      .content { padding: 28px 16px 104px; }
+      .page-heading { align-items: start; }
+      .review-intro, .review-complete { grid-template-columns: 1fr; }
+      .review-snapshot, .review-weekly { max-width: 560px; }
+      .review-masthead { display: grid; align-items: start; }
+      .review-masthead-copy { text-align: left; }
+      .review-action-head { display: grid; }
+      .review-task-controls { justify-content: flex-start; }
+      .decision-brief { grid-template-columns: 1fr; min-height: auto; }
+      .decision-brief::after { font-size: 160px; }
+      .metric-strip { grid-template-columns: repeat(2, 1fr); }
+      .metric:nth-child(3), .metric:nth-child(5) { border-left: 0; }
+      .metric:nth-child(n + 3) { border-top: 1px solid var(--line); }
+      .metric:nth-child(4) { border-left: 1px solid var(--line); }
+      .video-direction-board, .video-research-item { grid-template-columns: 1fr; }
+      .holding-sheet-head { grid-template-columns: 1fr; align-items: start; }
+      .holding-sheet-head .record-actions { grid-column: auto; }
+      .holding-sheet-body { grid-template-columns: 1fr; }
+      .holding-fundamentals { border-left: 0; border-top: 1px solid var(--line); }
+      .operation-overview { grid-template-columns: repeat(3, 1fr); }
+      .operation-overview p { grid-column: 1 / -1; justify-self: start; text-align: left; }
+      .operation-row { grid-template-columns: 76px 70px minmax(0, 1fr); }
+      .operation-duration { grid-column: 3; justify-items: start; display: flex; gap: var(--space-sm); }
+    }
+    @media (max-width: 620px) {
+      .decision-input-wrap { grid-column: auto; }
+      .sector-analysis-wrap { grid-column: auto; }
+      .market-metric-grid { grid-template-columns: 1fr; }
+      .market-metric { padding-left: 0; border-left: 0; border-top: 1px solid var(--line); }
+      .market-metric:first-child { border-top: 0; }
+      .market-analysis-badges { grid-template-columns: 1fr; }
+      .market-panel-head { flex-direction: column; }
+      .market-panel-head .heading-actions { width: 100%; }
+      .market-panel-head .heading-actions .button { flex: 1; }
+      body { font-size: 14px; }
+      h1 { font-size: 1.72rem; }
+      .topbar .button.ghost { display: none; }
+      .page-heading { display: grid; gap: var(--space-lg); margin-bottom: var(--space-xl); }
+      .heading-actions { width: 100%; }
+      .heading-actions .button { flex: 1; }
+      .review-intro { padding-top: var(--space-xl); }
+      .review-intro h2, .review-complete h2 { font-size: 2.55rem; }
+      .review-intro-actions, .review-step-actions { display: grid; align-items: stretch; }
+      .review-intro-actions .button, .review-step-actions .button { width: 100%; }
+      .review-preview { grid-template-columns: 1fr; gap: var(--space-2xl); }
+      .review-masthead { gap: var(--space-md); padding-bottom: var(--space-xl); }
+      .review-masthead h2 { font-size: 1.8rem; }
+      .review-masthead-copy { font-size: 13px; line-height: 1.6; }
+      .review-progress { grid-template-columns: repeat(3, 1fr); margin: var(--space-xl) 0 var(--space-2xl); }
+      .review-progress-step { grid-template-columns: 1fr; gap: var(--space-sm); min-height: 94px; padding: var(--space-md) var(--space-sm); }
+      .review-progress-step + .review-progress-step { border-left: 1px solid var(--line); border-top: 0; }
+      .review-progress-step small { display: none; }
+      .review-step-heading { display: grid; }
+      .review-step-heading h2 { font-size: 1.55rem; }
+      .review-quality { justify-items: start; }
+      .review-data-row { grid-template-columns: 34px minmax(0, 1fr); gap: var(--space-md); }
+      .review-data-score { grid-column: 2; text-align: left; }
+      .review-data-row > .button { grid-column: 2; justify-self: start; }
+      .review-action-row { grid-template-columns: 28px minmax(0, 1fr); gap: var(--space-md); }
+      .review-task-controls { display: grid; grid-template-columns: repeat(3, 1fr); }
+      .review-choice { padding-inline: var(--space-sm); }
+      .review-report-head { display: grid; }
+      .review-report-body { grid-template-columns: 1fr; }
+      .review-complete-item { grid-template-columns: 1fr; gap: var(--space-xs); }
+      .decision-brief { padding: var(--space-xl); }
+      .decision-brief h2 { font-size: 2.25rem; }
+      .metric { padding: var(--space-lg) var(--space-md); }
+      .metric-value { font-size: 1.18rem; }
+      .judgment-columns { grid-template-columns: 1fr; }
+      .evidence-row { grid-template-columns: 86px minmax(0, 1fr) 42px; }
+      .record-row, .record-row.compact, .decision-row {
+        grid-template-columns: 1fr;
+        gap: var(--space-md);
+      }
+      .record-numbers, .decision-row .record-actions { grid-column: auto; }
+      .record-actions { justify-content: flex-start; }
+      .holdings-guide { align-items: flex-start; }
+      .holdings-guide.attention { display: grid; }
+      .holding-sheet { padding-bottom: var(--space-xl); }
+      .holding-sheet-head { gap: var(--space-lg); padding-inline: 0; }
+      .holding-title { align-items: flex-start; justify-content: space-between; }
+      .holding-status { justify-content: flex-end; }
+      .holding-position { gap: var(--space-md); }
+      .holding-sheet-body { margin-inline: 0; }
+      .holding-thesis, .holding-fundamentals { padding: var(--space-lg) 0 0; }
+      .holding-fundamentals { margin-top: var(--space-lg); }
+      .holding-section-head { flex-wrap: wrap; }
+      .holding-section-head > small { width: 100%; margin-left: 0; }
+      .fundamental-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-md) var(--space-xl); }
+      .fundamental-metrics dt { min-height: auto; }
+      .operation-overview { gap: var(--space-lg); }
+      .operation-overview strong { font-size: 1.45rem; }
+      .operation-row { grid-template-columns: 68px minmax(0, 1fr); gap: var(--space-md); padding-inline: 0; }
+      .operation-state { justify-self: end; }
+      .operation-main { grid-column: 1 / -1; padding-left: 80px; }
+      .operation-duration { grid-column: 1 / -1; padding-left: 80px; }
+      .operation-title { align-items: flex-start; justify-content: space-between; }
+      .operation-details pre { margin-left: -80px; }
+      .market-sheet { grid-template-columns: 1fr; }
+      .gold-market-head { display: block; }
+      .gold-market-head .button { margin-top: var(--space-md); }
+      .gold-quote-grid { grid-template-columns: 1fr; }
+      .gold-quote { padding: var(--space-md) 0 0; border-top: 1px solid var(--line); border-left: 0; }
+      .metric-facts { grid-template-columns: 1fr 1fr; }
+      .form-grid { grid-template-columns: 1fr; padding: var(--space-lg); }
+      .sell-layout { grid-template-columns: 1fr; }
+      .sell-preview { border-left: 0; border-top: 1px solid var(--line); }
+      .sell-dialog-actions { align-items: stretch; }
+      .sell-feedback { max-width: none; }
+      .sell-action-buttons { width: 100%; }
+      .sell-action-buttons .button { flex: 1; }
+      .field.full { grid-column: auto; }
+      .dialog-head, .dialog-actions { padding: var(--space-lg); }
+      .dialog-actions .button { flex: 1; }
+      .toast { right: 16px; bottom: 88px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
+    }
+
+    /* ── 定时任务页 ─────────────────────────────────────────── */
+    .task-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: var(--space-lg); padding-top: var(--space-lg); }
+    .task-card { display: grid; gap: var(--space-md); padding: var(--space-lg); border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); box-shadow: var(--shadow-sm); }
+    .task-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-md); }
+    .task-card-head h2 { font-size: 15px; }
+    .task-card-desc { color: var(--ink-soft); font-size: 13px; line-height: 1.6; }
+    .task-card-meta { display: grid; gap: var(--space-sm); margin: 0; }
+    .task-card-meta div { display: grid; grid-template-columns: 72px 1fr; gap: var(--space-sm); font-size: 12.5px; }
+    .task-card-meta dt { color: var(--muted); }
+    .task-card-meta dd { margin: 0; color: var(--ink); font-variant-numeric: tabular-nums; }
+    .task-card-meta dd.risk { color: var(--red); }
+
+/* 过期数据引导条（§2.3：过期时引导重新采集） */
+.stale-banner { margin: 0 0 var(--space-md); padding: 10px 14px; border-radius: 8px; background: rgba(217, 119, 6, 0.08); border: 1px solid rgba(217, 119, 6, 0.3); color: #b45309; font-size: 13px; line-height: 1.6; }
+.stale-banner strong { color: #92400e; }

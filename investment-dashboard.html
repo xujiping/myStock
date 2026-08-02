@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>AI 投资决策工作台</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='28' fill='%2309392c'/%3E%3Ctext x='32' y='42' text-anchor='middle' font-size='32' fill='%2397d5a5'%3E策%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/dashboard.css">
+</head>
+<body>
+  <div class="loading-line" id="loading-line"></div>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">策</div>
+        <div><strong>投资决策工作台</strong><span>AI INVESTMENT OS</span></div>
+      </div>
+      <nav class="nav" aria-label="主导航">
+        <span class="nav-group-label">每天</span>
+        <button class="nav-button active" data-page-target="overview"><span class="nav-icon">今</span>今日决策</button>
+        <span class="nav-group-label">我的记录</span>
+        <button class="nav-button" data-page-target="holdings"><span class="nav-icon">持</span>持仓与关注</button>
+        <button class="nav-button" data-page-target="trades"><span class="nav-icon">变</span>持仓变更</button>
+        <button class="nav-button" data-page-target="decisions"><span class="nav-icon">报</span>AI 日报</button>
+        <span class="nav-group-label">研究依据</span>
+        <button class="nav-button" data-page-target="market"><span class="nav-icon">市</span>市场环境</button>
+        <button class="nav-button" data-page-target="sectors"><span class="nav-icon">板</span>关注板块</button>
+        <button class="nav-button" data-page-target="macro"><span class="nav-icon">宏</span>宏观变量</button>
+        <button class="nav-button" data-page-target="videos"><span class="nav-icon">研</span>视频研究</button>
+        <span class="nav-group-label">系统</span>
+        <button class="nav-button" data-page-target="tasks"><span class="nav-icon">时</span>定时任务</button>
+        <button class="nav-button" data-page-target="operations"><span class="nav-icon">录</span>运行日志</button>
+      </nav>
+      <div class="sidebar-foot">
+        <p>辅助建立投资框架，不预测收益。</p>
+      </div>
+    </aside>
+
+    <div class="workspace">
+      <header class="topbar">
+        <div class="breadcrumb"><span>AI 投资决策系统 / </span><strong id="current-page-label">今日决策</strong></div>
+        <div class="top-actions">
+          <span class="sync-state" id="sync-state">正在连接本地数据…</span>
+          <button class="button ghost small" id="refresh-button" type="button">刷新数据</button>
+          <button class="button primary small" id="global-report-button" data-generate-report type="button" title="会将账户与投资记录摘要发送给你配置的模型服务" hidden>生成今日日报</button>
+        </div>
+      </header>
+
+      <main class="content">
+        <section class="page" data-page="overview">
+          <div class="page-heading">
+            <div><h1>今日决策</h1><p>每个交易日只做一次收敛：确认数据、处理行动项、留下可复盘记录。非交易日自动跳过。</p></div>
+            <div class="heading-actions"><button class="button" data-collect="market" type="button">采集市场</button><button class="button" data-collect="all" type="button">一键采集行情</button></div>
+          </div>
+          <div id="overview-content" aria-live="polite"></div>
+        </section>
+
+        <section class="page" data-page="market" hidden>
+          <div class="page-heading">
+            <div><h1>市场环境</h1><p>原始行情来自外部接口采集，与 AI 分析结果分开存放：数据可重采、分析可重算，每一步都能看到依据。</p></div>
+            <div class="heading-actions"><button class="button" data-collect="market" type="button">采集市场</button><button class="button primary" data-analyze-market type="button">AI 分析</button></div>
+          </div>
+          <div id="market-content" aria-live="polite"></div>
+        </section>
+
+        <section class="page" data-page="holdings" hidden>
+          <div class="page-heading">
+            <div><h1>持仓与关注</h1><p>持仓与观察标的共用一张卡片：持仓需要维护成本价格、数量与逻辑，观察标的等待买入条件触发。每张卡片都会展示最新基本面，用「持仓中 / 关注中」标记区分。</p></div>
+            <div class="heading-actions" id="holdings-heading-actions"><button class="button" data-refresh-fundamentals type="button">刷新基本面</button><button class="button" data-refresh-quotes type="button">刷新行情</button></div>
+          </div>
+          <div id="fundamentals-content" aria-live="polite"></div>
+          <div id="holdings-content"></div>
+        </section>
+
+        <section class="page" data-page="sectors" hidden>
+          <div class="page-heading">
+            <div><h1>关注板块池</h1><p>从追逐单只股票转向跟踪主线、周期、验证指标与失效风险。AI 只给参考分析，评级与逻辑始终由你自己确认。</p></div>
+            <div class="heading-actions"><button class="button" data-collect="sector" type="button">采集板块行情</button><button class="button primary" data-analyze-sector type="button">AI 分析板块</button><button class="button primary" data-open-form="sector" type="button">添加板块</button></div>
+          </div>
+          <div id="sectors-content"></div>
+        </section>
+
+        <section class="page" data-page="macro" hidden>
+          <div class="page-heading">
+            <div><h1>宏观变量监控</h1><p>行情来自外部数据接口；人工判断与原始报价分开保存，避免把数据变化直接等同于投资结论。</p></div>
+            <div class="heading-actions"><button class="button" data-collect="macro" type="button">采集宏观行情</button><button class="button" data-refresh-gold type="button">刷新黄金行情</button><button class="button primary" data-open-form="macro" type="button">添加变量</button></div>
+          </div>
+          <div id="macro-content"></div>
+        </section>
+
+        <section class="page" data-page="decisions" hidden>
+          <div class="page-heading">
+            <div><h1>AI 日报与复盘</h1><p>每日 AI 日报负责判断，你只负责确认结论并事后复核。生成日报时，账户与持仓摘要会发送给你配置的模型服务。</p></div>
+            <div class="heading-actions"><button class="button primary" data-generate-report type="button">生成今日日报</button></div>
+          </div>
+          <div id="decisions-content"></div>
+        </section>
+
+        <section class="page" data-page="trades" hidden>
+          <div class="page-heading">
+            <div><h1>持仓变更记录</h1><p>每次更新持仓数量（加仓 / 减仓 / 清仓）都会自动留一条记录：原数量 → 新数量 + 变更原因。价格与费用以交易软件为准，系统不做计算。</p></div>
+          </div>
+          <div id="trades-content"></div>
+        </section>
+
+        <section class="page" data-page="videos" hidden>
+          <div class="page-heading">
+            <div><h1>视频观点研究库</h1><p>视频观点是综合判断的一种外部依据。保留原文与原视频，AI 提炼不替代人工核验。</p></div>
+          </div>
+          <div id="videos-content"></div>
+        </section>
+
+        <section class="page" data-page="tasks" hidden>
+          <div class="page-heading">
+            <div><h1>定时任务</h1><p>看板服务运行期间自动执行：每日数据采集、行情刷新与数据库备份。任务状态、下次运行与最近结果在此可见，也可手动触发。</p></div>
+            <div class="heading-actions"><button class="button" data-refresh-tasks type="button">刷新状态</button></div>
+          </div>
+          <div id="tasks-content" aria-live="polite"></div>
+        </section>
+
+        <section class="page" data-page="operations" hidden>
+          <div class="page-heading">
+            <div><h1>系统运行日志</h1><p>逐条记录行情采集、视频分析、报告生成等后台任务，结果与原始输出均可追溯。</p></div>
+            <div class="heading-actions"><button class="button" data-refresh-logs type="button">刷新日志</button></div>
+          </div>
+          <div id="operations-content" aria-live="polite"></div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <dialog id="record-dialog">
+    <form class="dialog-shell" id="record-form" method="dialog">
+      <div class="dialog-head"><div><h2 id="dialog-title">编辑记录</h2><p class="muted" id="dialog-subtitle"></p></div><button class="dialog-close" type="button" data-close-dialog aria-label="关闭">×</button></div>
+      <div class="dialog-error" id="dialog-error" hidden></div>
+      <div class="form-grid" id="form-fields"></div>
+      <div class="dialog-actions"><button class="button" type="button" data-close-dialog>取消</button><button class="button primary" id="save-button" type="submit">保存记录</button></div>
+    </form>
+  </dialog>
+
+
+  <dialog id="confirm-dialog">
+    <div class="dialog-shell">
+      <div class="dialog-head"><div><h2>删除这条记录？</h2><p class="muted">删除后不会影响原视频和转写数据。</p></div><button class="dialog-close" type="button" data-close-confirm aria-label="关闭">×</button></div>
+      <p class="confirm-copy" id="confirm-copy"></p>
+      <div class="dialog-actions"><button class="button" type="button" data-close-confirm>取消</button><button class="button danger" id="confirm-delete" type="button">确认删除</button></div>
+    </div>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="/dashboard.js"></script>
+</body>
+</html>
