@@ -1,0 +1,35 @@
+{
+  "name": "kaige-ai-investment-dashboard",
+  "version": "2.0.0",
+  "private": true,
+  "description": "以持仓、市场、板块、决策和视频观点为依据的 AI 辅助投资系统",
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "scripts": {
+    "analyze": "node analyze-videos.cjs",
+    "summarize": "node analyze-videos.cjs --summarize-only",
+    "update": "node update.cjs",
+    "update:open": "node update.cjs --open",
+    "watch": "node watch.cjs",
+    "serve": "node --disable-warning=ExperimentalWarning serve.cjs --no-open",
+    "restart": "node scripts/restart-dashboard.cjs",
+    "restart:open": "node scripts/restart-dashboard.cjs --open",
+    "open": "node --disable-warning=ExperimentalWarning serve.cjs",
+    "check": "node scripts/check-investment.cjs",
+    "test": "node --test scripts/test/parsers-and-store.test.cjs",
+    "backup": "node scripts/backup-investment.cjs",
+    "backup:list": "node scripts/backup-investment.cjs --list",
+    "collect:market": "node --disable-warning=ExperimentalWarning scripts/collect-market.cjs",
+    "analyze:market": "node --disable-warning=ExperimentalWarning scripts/analyze-market.cjs",
+    "analyze:sector": "node --disable-warning=ExperimentalWarning scripts/analyze-sector.cjs",
+    "collect:macro": "node --disable-warning=ExperimentalWarning scripts/collect-macro.cjs",
+    "collect:sector": "node --disable-warning=ExperimentalWarning scripts/collect-sector.cjs",
+    "collect": "node --disable-warning=ExperimentalWarning scripts/collect-all.cjs"
+  },
+  "dependencies": {
+    "@alicloud/nls-filetrans-2018-08-17": "^1.0.0",
+    "cos-nodejs-sdk-v5": "^3.0.0",
+    "dotenv": "^16.6.1"
+  }
+}
