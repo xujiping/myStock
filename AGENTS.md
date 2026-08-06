@@ -49,7 +49,7 @@
 | `kai_invest_sector` | 板块池 | 采集 + AI 参考 + 人工 |
 | `kai_invest_decision` | 投资判断与 AI 日报（含 `input_snapshot`） | 人工 + 日报生成 |
 | `kai_invest_trade_log` | 交易记录 | 仅人工（看板操作产生） |
-| `kai_invest_daily_review` | 每日复盘 | 仅人工（看板交互） |
+| `kai_invest_daily_review` | 每日复盘（含七步短线笔记） | 仅人工（看板交互） |
 | `kai_invest_stock_fundamentals` | 持仓股财务指标 | `stock-fundamentals.cjs` |
 | `kai_invest_stock_quote` | 个股行情快照 | `collect-quotes.cjs` / 定时任务 |
 | `kai_invest_operation_log` | 系统运行日志 | `serve.cjs` |
@@ -86,7 +86,7 @@
 |---|---|---|
 | `kai_invest_portfolio` | 仅人工 | 行情刷新只写 `kai_invest_stock_quote`，禁止回写持仓价格/盈亏 |
 | `kai_invest_trade_log` | 仅人工 | AI 禁止生成或修改任何买卖记录 |
-| `kai_invest_daily_review` | 仅人工 | AI 禁止代填复盘 |
+| `kai_invest_daily_review` | 仅人工 | AI 禁止代填复盘；`framework_notes_json` 仅保存人工核验的七步短线观察，系统可展示关联的客观行情但不得代填连板、涨停或次日计划 |
 | `kai_invest_decision` | 人工 + 日报生成 | AI 日报是综合摘要，不是买卖指令；必须存 `input_snapshot` |
 | `kai_invest_stock_fundamentals` | `stock-fundamentals.cjs` | 只写客观财务指标 |
 | `kai_invest_stock_quote` | `collect-quotes.cjs` | 只写客观行情，不做盈亏金额计算 |

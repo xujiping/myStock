@@ -716,6 +716,27 @@ test('saveDailyReview: 仅允许人工来源，AI/collect 被拒绝', () => {
   } finally { cleanup(); }
 });
 
+test('saveDailyReview: 七步短线复盘笔记仅保存人工输入并可回读', () => {
+  const { store, cleanup } = tempStore();
+  try {
+    const saved = store.saveDailyReview({
+      review_date: '2026-08-03',
+      framework_notes: {
+        sentiment: '昨日涨停溢价分化，明日降低接力预期。',
+        ladder: '三板以上仅 1 只，梯队偏薄。',
+        tomorrowPlan: '若核心股低开无承接，则不参与追涨。',
+        unknown: '不应保存',
+      },
+    });
+    assert.equal(saved.framework_notes.sentiment, '昨日涨停溢价分化，明日降低接力预期。');
+    assert.equal(saved.framework_notes.ladder, '三板以上仅 1 只，梯队偏薄。');
+    assert.equal(saved.framework_notes.tomorrowPlan, '若核心股低开无承接，则不参与追涨。');
+    assert.equal(saved.framework_notes.unknown, undefined);
+    const row = store.db.prepare('SELECT framework_notes_json FROM kai_invest_daily_review WHERE review_date = ?').get('2026-08-03');
+    assert.equal(JSON.parse(row.framework_notes_json).sentiment, saved.framework_notes.sentiment);
+  } finally { cleanup(); }
+});
+
 // ── 本地鉴权：写操作的 Origin/Host 校验（防 DNS rebinding / 跨站）──────────────
 const { checkLocalOrigin } = require('../../serve.cjs');
 

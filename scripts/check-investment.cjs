@@ -207,8 +207,10 @@ async function main() {
     assert.ok(dashboard.includes('data-refresh-gold'));
     assert.ok(dashboard.includes('/api/investment/gold/refresh'));
     assert.ok(dashboard.includes('/api/investment/daily-review'));
-    assert.ok(dashboard.includes('开始今日复盘'));
+    assert.ok(dashboard.includes('开始收盘复盘'));
     assert.ok(dashboard.includes('完成今日复盘'));
+    assert.ok(dashboard.includes('七步看清市场'));
+    assert.ok(dashboard.includes('framework_notes'));
     assert.ok(dashboard.includes('change_reason'));
     assert.ok(dashboard.includes('/api/investment/portfolio'));
     assert.ok(dashboardHtml.includes('<script src="/dashboard.js"></script>'), '看板应外链 dashboard.js');

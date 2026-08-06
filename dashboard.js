@@ -249,6 +249,92 @@ function reviewStatusLabel(status) {
   return ({ done: '已处理', deferred: '已暂缓', ignored: '已忽略', pending: '未处理' })[status] || '未处理';
 }
 
+const SHORT_REVIEW_STEPS = [
+  {
+    key: 'sentiment', number: '01', title: '整体情绪',
+    prompt: '先看市场温度：涨停、跌停、炸板率与昨日涨停溢价。',
+    placeholder: '例如：昨日涨停溢价分化；炸板率偏高，接力容错率下降。',
+  },
+  {
+    key: 'ladder', number: '02', title: '连板梯队',
+    prompt: '记录最高板、2/3/4 板是否断层，以及高位股的晋级或补跌。',
+    placeholder: '例如：最高 5 板；2→3 板有断层，高位断板后有明显负反馈。',
+  },
+  {
+    key: 'sectors', number: '03', title: '板块结构',
+    prompt: '只看组团上涨的方向：龙头、跟风与中军是否齐全。',
+    placeholder: '例如：商业航天有龙头与中军共振；其余仅单股异动，暂不定义为主线。',
+  },
+  {
+    key: 'capital', number: '04', title: '资金足迹',
+    prompt: '结合成交额、主力资金和大成交标的，判断趋势或存量博弈。',
+    placeholder: '例如：大票承接一般，小票活跃，仍按存量博弈处理；龙虎榜仅作佐证。',
+  },
+  {
+    key: 'loss', number: '05', title: '亏钱效应',
+    prompt: '标记跌停、大面、高位补跌与集体退潮的共同点。',
+    placeholder: '例如：高位题材出现大面扩散，明日避免同类后排与弱转强追高。',
+  },
+  {
+    key: 'windVanes', number: '06', title: '重点风向标',
+    prompt: '只留 5–8 只：日内龙头、抗跌票、反包票或低位突破。',
+    placeholder: '例如：A（龙头）、B（中军）、C（弱转强）；分别观察开盘承接与板块跟随。',
+  },
+  {
+    key: 'tomorrowPlan', number: '07', title: '明日剧本',
+    prompt: '写清触发、失效和仓位，不写模糊的“继续关注”。',
+    placeholder: '例如：若龙头高开有承接且两只跟风同步转强，才小仓观察；若低开跌破关键位，取消交易。',
+  },
+];
+
+function frameworkSourceSummary(data, key) {
+  const market = data.market || {};
+  const metrics = market.metrics || {};
+  const advanceDecline = metrics.advanceDecline && typeof metrics.advanceDecline === 'object'
+    ? metrics.advanceDecline
+    : null;
+  const turnover = metrics.turnover?.text || '成交额待采集';
+  const mainFunds = metrics.mainFunds?.mainNet;
+  if (key === 'sentiment') {
+    const breadth = advanceDecline ? `涨 ${advanceDecline.up} / 平 ${advanceDecline.flat} / 跌 ${advanceDecline.down}` : '涨跌家数待采集';
+    return `系统数据：${metrics.sentiment || '市场情绪待采集'}；${breadth}。涨跌停、炸板率与昨日涨停表现需人工补充。`;
+  }
+  if (key === 'ladder') return '系统数据：当前未接入连板、断板与昨日高位股表现；请按榜单人工记录，勿用猜测补全。';
+  if (key === 'sectors') {
+    const names = (data.sectors || []).filter(item => Number(item.rating) >= 4).slice(0, 3).map(item => item.name);
+    return `系统数据：板块池 ${data.sectors?.length || 0} 个${names.length ? `；重点跟踪 ${names.join('、')}` : ''}。是否“组团上涨”仍需结合收盘榜单确认。`;
+  }
+  if (key === 'capital') return `系统数据：两市成交 ${turnover}；主力资金 ${mainFunds == null ? '待采集' : `${mainFunds} 亿`}。大成交榜与龙虎榜仅作人工佐证。`;
+  if (key === 'loss') return `系统数据：${advanceDecline ? `涨跌家数 ${advanceDecline.up}/${advanceDecline.down}` : '涨跌家数待采集'}。跌停、大面与补跌样本尚未接入，请人工标记共性。`;
+  if (key === 'windVanes') return `系统数据：关注池现有 ${data.watchlist?.length || 0} 只。请人为筛成不超过 8 只风向标，不把全部自选当作信号。`;
+  return `系统背景：${market.strategy || '市场策略待形成'} 以下是你的交易计划，不是 AI 指令。`;
+}
+
+function renderShortReviewFramework(data) {
+  const notes = state.review?.framework_notes || {};
+  const filled = SHORT_REVIEW_STEPS.filter(item => notes[item.key]).length;
+  return `<section class="short-review-framework">
+    <div class="short-review-heading">
+      <div><p class="review-eyebrow">CLOSE REVIEW · 30 MINUTES</p><h3>七步看清市场，再写明天的剧本。</h3><p>系统只预填可追溯的客观数据；连板、炸板与风向标由你人工核验。这里不生成买卖指令。</p></div>
+      <div class="short-review-count"><strong>${filled}</strong><span>/ 7 已记录</span></div>
+    </div>
+    <div class="short-review-list">${SHORT_REVIEW_STEPS.map(item => `
+      <article class="short-review-row ${notes[item.key] ? 'is-filled' : ''}">
+        <div class="short-review-number">${item.number}</div>
+        <div class="short-review-copy"><h4>${item.title}</h4><p>${item.prompt}</p><small>${escapeHtml(frameworkSourceSummary(data, item.key))}</small></div>
+        <label class="short-review-note"><span>人工观察</span><textarea data-framework-note="${item.key}" aria-label="${item.title}人工观察" placeholder="${item.placeholder}">${escapeHtml(notes[item.key] || '')}</textarea></label>
+      </article>`).join('')}</div>
+    <div class="short-review-actions"><p>“明日剧本”至少写一个可执行条件和一个失效条件；空白项会保留为空白，而不会由系统补写。</p><button class="button primary" data-save-framework type="button">保存七步笔记</button></div>
+  </section>`;
+}
+
+function readFrameworkNotes() {
+  return SHORT_REVIEW_STEPS.reduce((notes, item) => {
+    notes[item.key] = $(`[data-framework-note="${item.key}"]`)?.value.trim() || '';
+    return notes;
+  }, {});
+}
+
 function reviewProgress(step) {
   const steps = [
     ['确认数据', '知道结论基于什么'],
@@ -282,10 +368,10 @@ function renderReviewStart(data) {
   return `
     <section class="review-intro">
       <div>
-        <p class="review-eyebrow">${escapeHtml(displayReviewDate())} · 预计 3 分钟</p>
-        <h2>今天只处理真正影响决策的事。</h2>
-        <p class="review-intro-copy">不用浏览八个页面。先确认依据是否可靠，再处理最多三个行动项，最后留下一份以后能检查对错的记录。</p>
-        <div class="review-intro-actions"><button class="button primary" data-start-review type="button">开始今日复盘</button><small>不会自动下单，也不会把视频观点当成指令。</small></div>
+        <p class="review-eyebrow">${escapeHtml(displayReviewDate())} · 收盘后约 30 分钟</p>
+        <h2>先看市场，再看自己的票。</h2>
+        <p class="review-intro-copy">七步把情绪、梯队、板块、资金、亏钱效应和明日剧本串成一条线；原始行情与人工判断始终分开保存。</p>
+        <div class="review-intro-actions"><button class="button primary" data-start-review type="button">开始收盘复盘</button><small>不会自动下单，也不会把视频观点当成指令。</small></div>
       </div>
       <aside class="review-snapshot" aria-label="今日底稿摘要">
         <div class="review-snapshot-row"><span>当前市场</span><strong>${escapeHtml(judgment.status || '待更新')}</strong></div>
@@ -295,9 +381,9 @@ function renderReviewStart(data) {
       </aside>
     </section>
     <ol class="review-preview">
-      <li><h3>确认依据</h3><p>直接看到每类数据的质量、日期和缺口，不再用“有记录”冒充“可判断”。</p></li>
+      <li><h3>七步扫市场</h3><p>先确认可用数据，再人工核验连板、炸板、亏钱效应与风向标。</p></li>
       <li><h3>只做三个决定</h3><p>对风险与机会选择已处理、暂缓或忽略；每次选择都可以留下理由。</p></li>
-      <li><h3>明确结束</h3><p>日报只是总结。完成后系统保存今天的决定，刷新或重启也不会丢失。</p></li>
+      <li><h3>写明日剧本</h3><p>写触发、失效和仓位边界；日报只是总结，不能替代交易计划。</p></li>
     </ol>`;
 }
 
@@ -306,7 +392,7 @@ function renderReviewDataStep(data) {
   return `
     <section class="review-step-section">
       <div class="review-step-heading">
-        <div><h2>第一步：确认今天依据够不够</h2><p>分数表达数据质量，不表达投资胜率。即使有缺口，也可以明确知情后继续。</p></div>
+        <div><h2>第一步：确认依据，再完成七步复盘</h2><p>分数表达数据质量，不表达投资胜率。先看系统已有数据，再把收盘榜单核验结果留在下方。</p></div>
         <div class="review-quality"><strong>${judgment.completeness}%</strong><span>当前数据质量</span></div>
       </div>
       <div class="review-data-list">${judgment.completenessChecks.map(item => `
@@ -316,6 +402,7 @@ function renderReviewDataStep(data) {
           <div class="review-data-score"><strong>${Number(item.score || 0)}</strong> / ${Number(item.maxScore || 0)}</div>
           ${reviewCheckButton(item)}
         </div>`).join('')}</div>
+      ${renderShortReviewFramework(data)}
       <div class="review-step-actions"><p>${judgment.completeness < 60 ? '数据质量偏低，后续结论会保留不确定性；你仍可按现有信息继续。' : '依据已达到可复盘水平，下一步只看需要处理的事项。'}</p><button class="button primary" data-review-next="2" type="button">确认数据，查看行动项</button></div>
     </section>`;
 }
@@ -379,6 +466,7 @@ function renderReviewCompleted(data) {
   const processedCount = recentItems.filter(item => item.status === 'done').length;
   const deferredCount = recentItems.filter(item => item.status === 'deferred').length;
   const latestReport = data.decisions.find(item => item.decision_type === 'daily_report' && item.decision_date === currentReviewDate());
+  const frameworkNotes = SHORT_REVIEW_STEPS.filter(item => state.review?.framework_notes?.[item.key]);
   return `
     <section class="review-complete">
       <div>
@@ -398,6 +486,7 @@ function renderReviewCompleted(data) {
     <section class="review-complete-list">
       <div class="section-head"><h2>今天留下了什么</h2><small>${escapeHtml(formatDateTime(state.review?.completed_at))}</small></div>
       ${items.map(item => `<div class="review-complete-item"><span>${reviewStatusLabel(item.status)}</span><div><strong>${escapeHtml(item.title)}</strong>${item.note ? `<p class="muted">${escapeHtml(item.note)}</p>` : ''}</div></div>`).join('') || '<div class="review-complete-item"><span>无行动项</span><div><strong>今天没有触发需要处理的事项</strong></div></div>'}
+      ${frameworkNotes.length ? `<div class="review-framework-summary"><span>七步笔记</span><div>${frameworkNotes.map(item => `<div><strong>${escapeHtml(item.title)}</strong><p>${escapeHtml(state.review.framework_notes[item.key])}</p></div>`).join('')}</div></div>` : ''}
       ${state.review?.summary_note ? `<div class="review-complete-item"><span>今日一句话</span><div><strong>${escapeHtml(state.review.summary_note)}</strong></div></div>` : ''}
     </section>`;
 }
@@ -1579,6 +1668,29 @@ async function startReview() {
   notify('今日复盘已开始');
 }
 
+async function saveFrameworkNotes() {
+  const button = $('[data-save-framework]');
+  if (button) {
+    button.disabled = true;
+    button.textContent = '保存中…';
+  }
+  try {
+    await saveReview({ framework_notes: readFrameworkNotes() }, false);
+    notify('七步复盘笔记已保存');
+    if (button) button.textContent = '已保存';
+  } catch (error) {
+    notify(`七步笔记未保存：${error.message}`, 'error');
+    if (button) button.textContent = '保存七步笔记';
+  } finally {
+    if (button) {
+      button.disabled = false;
+      setTimeout(() => {
+        if (button.isConnected && button.textContent === '已保存') button.textContent = '保存七步笔记';
+      }, 1400);
+    }
+  }
+}
+
 async function advanceReview(step) {
   const nextStep = Number(step);
   if (nextStep === 3 && state.review?.items?.some(item => item.status === 'pending')) {
@@ -2024,6 +2136,7 @@ document.addEventListener('click', event => {
     updateReviewTask(reviewTask.dataset.reviewTask, reviewTask.dataset.taskStatus).catch(() => {});
     return;
   }
+  if (event.target.closest('[data-save-framework]')) { saveFrameworkNotes().catch(() => {}); return; }
   if (event.target.closest('[data-complete-review]')) { completeReview().catch(() => {}); return; }
   if (event.target.closest('[data-reopen-review]')) { reopenReview().catch(() => {}); return; }
   const pageButton = event.target.closest('[data-page-target]');

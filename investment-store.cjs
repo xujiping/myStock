@@ -347,6 +347,17 @@ function normalizeReviewItems(value) {
   })).filter((item) => item.title);
 }
 
+// 七步短线复盘只保存人工观察，不混入采集字段或 AI 结论。
+// 每项限定长度，既能保留复盘上下文，也避免把整段外部文章写进本地库。
+function normalizeReviewFrameworkNotes(value) {
+  const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  const keys = ['sentiment', 'ladder', 'sectors', 'capital', 'loss', 'windVanes', 'tomorrowPlan'];
+  return keys.reduce((notes, key) => {
+    notes[key] = cleanString(source[key]).slice(0, 2400);
+    return notes;
+  }, {});
+}
+
 class InvestmentStore {
   constructor(databasePath = process.env.INVESTMENT_DB_PATH || DEFAULT_DB_PATH) {
     this.databasePath = databasePath;
@@ -471,6 +482,7 @@ class InvestmentStore {
         status TEXT NOT NULL DEFAULT 'in_progress' CHECK (status IN ('in_progress', 'completed')),
         current_step INTEGER NOT NULL DEFAULT 1 CHECK (current_step BETWEEN 1 AND 3),
         items_json TEXT NOT NULL DEFAULT '[]',
+        framework_notes_json TEXT NOT NULL DEFAULT '{}',
         summary_note TEXT NOT NULL DEFAULT '',
         started_at TEXT NOT NULL,
         completed_at TEXT NOT NULL DEFAULT '',
@@ -573,6 +585,9 @@ class InvestmentStore {
       analysis_source: "TEXT NOT NULL DEFAULT ''",
       analyzed_at: "TEXT NOT NULL DEFAULT ''",
       analysis_note: "TEXT NOT NULL DEFAULT ''",
+    });
+    this.ensureColumns('kai_invest_daily_review', {
+      framework_notes_json: "TEXT NOT NULL DEFAULT '{}'",
     });
     this.migrateDropPortfolioCurrentPrice();
     this.seed();
@@ -906,14 +921,22 @@ class InvestmentStore {
     }
     const row = this.db.prepare('SELECT * FROM kai_invest_daily_review WHERE review_date = ?').get(date);
     if (!row) return null;
-    return { ...row, items: parseJson(row.items_json || '[]', []) };
+    return {
+      ...row,
+      items: parseJson(row.items_json || '[]', []),
+      framework_notes: normalizeReviewFrameworkNotes(parseJson(row.framework_notes_json || '{}', {})),
+    };
   }
 
   listDailyReviews(limit = 7) {
     const safeLimit = clamp(Number(limit) || 7, 1, 31);
     return this.db.prepare(
       'SELECT * FROM kai_invest_daily_review ORDER BY review_date DESC LIMIT ?',
-    ).all(safeLimit).map((row) => ({ ...row, items: parseJson(row.items_json || '[]', []) }));
+    ).all(safeLimit).map((row) => ({
+      ...row,
+      items: parseJson(row.items_json || '[]', []),
+      framework_notes: normalizeReviewFrameworkNotes(parseJson(row.framework_notes_json || '{}', {})),
+    }));
   }
 
   // 决策复盘命中率统计：已复盘的决策中，各结论占比与时间窗
@@ -956,6 +979,7 @@ class InvestmentStore {
     const status = payload.status === 'completed' ? 'completed' : 'in_progress';
     const currentStep = clamp(Number(payload.current_step) || existing?.current_step || 1, 1, 3);
     const items = normalizeReviewItems(payload.items ?? existing?.items ?? []);
+    const frameworkNotes = normalizeReviewFrameworkNotes(payload.framework_notes ?? existing?.framework_notes ?? {});
     const completedAt = status === 'completed'
       ? (cleanString(payload.completed_at) || existing?.completed_at || timestamp)
       : '';
@@ -964,6 +988,7 @@ class InvestmentStore {
       status,
       current_step: currentStep,
       items_json: JSON.stringify(items),
+      framework_notes_json: JSON.stringify(frameworkNotes),
       summary_note: cleanString(payload.summary_note ?? existing?.summary_note).slice(0, 2400),
       started_at: cleanString(payload.started_at) || existing?.started_at || timestamp,
       completed_at: completedAt,
@@ -972,16 +997,17 @@ class InvestmentStore {
     };
     this.db.prepare(`
       INSERT INTO kai_invest_daily_review (
-        review_date, status, current_step, items_json, summary_note,
+        review_date, status, current_step, items_json, framework_notes_json, summary_note,
         started_at, completed_at, created_at, updated_at
       ) VALUES (
-        :review_date, :status, :current_step, :items_json, :summary_note,
+        :review_date, :status, :current_step, :items_json, :framework_notes_json, :summary_note,
         :started_at, :completed_at, :created_at, :updated_at
       )
       ON CONFLICT(review_date) DO UPDATE SET
         status = excluded.status,
         current_step = excluded.current_step,
         items_json = excluded.items_json,
+        framework_notes_json = excluded.framework_notes_json,
         summary_note = excluded.summary_note,
         started_at = excluded.started_at,
         completed_at = excluded.completed_at,
