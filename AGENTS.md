@@ -34,13 +34,14 @@
 - `investment-analysis.cjs`：看板数据装配（`buildOverview`）。
 - `investment-dashboard.html`：投资看板页面。
 - `sector-graph.html`：板块 × 公司 关系图谱页面（只读展示；数据由 `/api/investment/sector-graph` 实时装配，不写库）。
+- `industry-map.html`：产业链地图页面（盘后研究；层级和核心标的仅人工维护，行情只读展示）。
 - `serve.cjs`：HTTP 服务，实时读库；内置 `scripts/task-scheduler.cjs` 调度每日数据采集 / 行情刷新 / 数据库备份，**不依赖 launchd**（`scripts/install-collect-schedule.cjs`、`install-backup-schedule.cjs` 已废弃；`install-schedule.cjs` 仅用于视频下载分析）。
 - `scripts/`：`collect-macro.cjs` / `collect-market.cjs` / `collect-sector.cjs` / `collect-all.cjs`（行情采集）、`collect-quotes.cjs`（个股行情）、`analyze-market.cjs` / `analyze-sector.cjs`（AI 分析）、`backup-investment.cjs`、`check-investment.cjs`、`restart-dashboard.cjs`、`trading-calendar.cjs`、`task-scheduler.cjs`、`lib/`（网络与解析工具）、`test/`。
 - `stock-fundamentals.cjs`：阿里云计费接口采集持仓股财务指标（见 `docs/api-aliyun-stockhistory.md`）。
 - `gold-market.cjs`：阿里云云市场「探数API」上海金交所金价（AppCode 认证）。
 - `operation-log.cjs`：操作日志封装。
 
-**数据库**：`data/investment.sqlite` 是投资模块唯一数据源，看板实时读库，不依赖 `reports/data.json`。当前共 9 张表，全部带项目前缀 `kai_`：
+**数据库**：`data/investment.sqlite` 是投资模块唯一数据源，看板实时读库，不依赖 `reports/data.json`。当前共 11 张表，全部带项目前缀 `kai_`：
 
 | 表 | 用途 | 写入方 |
 |---|---|---|
@@ -52,6 +53,8 @@
 | `kai_invest_daily_review` | 每日复盘（含七步短线笔记） | 仅人工（看板交互） |
 | `kai_invest_stock_fundamentals` | 持仓股财务指标 | `stock-fundamentals.cjs` |
 | `kai_invest_stock_quote` | 个股行情快照 | `collect-quotes.cjs` / 定时任务 |
+| `kai_invest_industry_node` | 产业链层级节点 | 仅人工（产业链地图） |
+| `kai_invest_industry_constituent` | 节点与核心标的归属 | 仅人工（产业链地图） |
 | `kai_invest_operation_log` | 系统运行日志 | `serve.cjs` |
 
 运行时目录：`videos/`、`audio/`、`transcripts/`、`reports/`、`logs/` 属生成或本地数据，不应提交大文件或密钥；`data/` 已 gitignore。
@@ -90,6 +93,7 @@
 | `kai_invest_decision` | 人工 + 日报生成 | AI 日报是综合摘要，不是买卖指令；必须存 `input_snapshot` |
 | `kai_invest_stock_fundamentals` | `stock-fundamentals.cjs` | 只写客观财务指标 |
 | `kai_invest_stock_quote` | `collect-quotes.cjs` | 只写客观行情，不做盈亏金额计算 |
+| `kai_invest_industry_node` / `kai_invest_industry_constituent` | 仅人工 | 初始商业航天模板可编辑；AI、采集脚本均不得写入。板块均幅只可由行情快照计算展示，不得替代官方行业指数或写回研究内容 |
 | `kai_invest_operation_log` | `serve.cjs` | 系统日志 |
 
 ### 2.2 AI 禁止清单

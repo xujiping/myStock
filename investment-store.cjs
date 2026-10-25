@@ -5,6 +5,92 @@ const { DatabaseSync } = require('node:sqlite');
 const ROOT = __dirname;
 const DEFAULT_DB_PATH = path.join(ROOT, 'data', 'investment.sqlite');
 
+// 产业链地图的首个可编辑模板。它只提供盘后研究的起点，不构成投资建议；后续维护完全由用户在页面中完成。
+const COMMERCIAL_SPACE_TEMPLATE = {
+  root: {
+    name: '商业航天',
+    description: '围绕低成本进入空间、卫星组网与下游数据应用的产业链研究框架。',
+    research_note: '先看产业进展和订单兑现，再看市场对细分方向的反馈。',
+    risk_note: '主题交易波动大，项目节奏、订单与政策落地存在不确定性。',
+  },
+  branches: [
+    {
+      name: '火箭与发射服务', description: '运载火箭、发动机、发射场配套与发射服务。',
+      children: [
+        { name: '火箭电子与控制', description: '箭上电子、测控与惯导等关键环节。', stocks: [
+          ['航天电子', '600879', '核心标的', '航天电子与测控配套方向。'],
+          ['航天动力', '600343', '核心标的', '航天动力系统相关方向。'],
+        ] },
+        { name: '发射装备与服务', description: '发射任务配套、结构件与服务保障。', stocks: [
+          ['上海沪工', '603131', '关注标的', '航天装备与结构件相关方向。'],
+          ['西测测试', '301306', '关注标的', '军工及航天测试服务相关方向。'],
+        ] },
+      ],
+    },
+    {
+      name: '卫星制造与载荷', description: '卫星平台、姿轨控、有效载荷与关键部组件。',
+      children: [
+        { name: '卫星平台', description: '卫星总体、平台制造与系统集成。', stocks: [
+          ['中国卫星', '600118', '核心标的', '小卫星制造与应用方向。'],
+          ['航天科技', '000901', '关注标的', '航天应用与系统配套方向。'],
+        ] },
+        { name: '载荷与星敏感器', description: '遥感、通信载荷及姿态测量部件。', stocks: [
+          ['天银机电', '300342', '关注标的', '星敏感器等卫星姿态测量方向。'],
+          ['铖昌科技', '001270', '核心标的', '相控阵 T/R 芯片等星载通信部件方向。'],
+        ] },
+      ],
+    },
+    {
+      name: '卫星互联网与通信', description: '低轨卫星组网、星间链路、卫星通信与终端。',
+      children: [
+        { name: '卫星通信运营', description: '卫星通信资源、运营与服务。', stocks: [
+          ['中国卫通', '601698', '核心标的', '卫星通信运营服务方向。'],
+          ['海格通信', '002465', '核心标的', '卫星通信、导航与终端方向。'],
+        ] },
+        { name: '相控阵与终端', description: '地面与机载终端、相控阵天线及通信芯片。', stocks: [
+          ['上海瀚讯', '300762', '关注标的', '宽带卫星通信与终端方向。'],
+          ['震有科技', '688418', '关注标的', '卫星互联网通信设备方向。'],
+        ] },
+      ],
+    },
+    {
+      name: '地面系统与测控', description: '地面站、测运控、时间频率与导航增强。',
+      children: [
+        { name: '测运控与地面站', description: '卫星在轨管理、测控与地面网络。', stocks: [
+          ['航天宏图', '688066', '关注标的', '遥感数据与卫星应用服务方向。'],
+          ['海格通信', '002465', '核心标的', '卫星通信及测控终端方向。'],
+        ] },
+        { name: '北斗与时空信息', description: '高精度定位、导航与时空信息服务。', stocks: [
+          ['北斗星通', '002151', '核心标的', '北斗芯片、模组与时空信息方向。'],
+          ['中海达', '300177', '关注标的', '高精度定位与时空数据方向。'],
+        ] },
+      ],
+    },
+    {
+      name: '遥感应用与数据服务', description: '遥感卫星数据处理、数字地球与行业应用。',
+      children: [
+        { name: '遥感数据处理', description: '遥感数据获取、处理与行业服务。', stocks: [
+          ['中科星图', '688568', '核心标的', '数字地球与空天信息应用方向。'],
+          ['航天宏图', '688066', '核心标的', '卫星遥感软件与数据服务方向。'],
+        ] },
+      ],
+    },
+    {
+      name: '材料、结构件与测试', description: '高可靠材料、精密制造、连接器与试验验证。',
+      children: [
+        { name: '特种电子与连接', description: '高可靠电子元器件、连接器与线缆组件。', stocks: [
+          ['航天电器', '002025', '关注标的', '高可靠连接器及组件方向。'],
+          ['鸿远电子', '603267', '关注标的', '高可靠电子元器件方向。'],
+        ] },
+        { name: '结构件与试验验证', description: '精密结构件、环境试验与可靠性验证。', stocks: [
+          ['西测测试', '301306', '关注标的', '军工及航天测试服务相关方向。'],
+          ['超捷股份', '301005', '关注标的', '高强度精密紧固件及结构件方向。'],
+        ] },
+      ],
+    },
+  ],
+};
+
 const RESOURCE_CONFIG = {
   portfolio: {
     table: 'kai_invest_portfolio',
@@ -358,6 +444,46 @@ function normalizeReviewFrameworkNotes(value) {
   }, {});
 }
 
+function normalizeIndustryNode(payload = {}, partial = false) {
+  const result = {};
+  if (!partial || Object.hasOwn(payload, 'parent_id')) result.parent_id = Math.max(0, Math.floor(Number(payload.parent_id) || 0));
+  for (const key of ['name', 'description', 'research_note', 'risk_note']) {
+    if (!partial || Object.hasOwn(payload, key)) {
+      const limit = key === 'name' ? 80 : 2400;
+      result[key] = cleanString(payload[key]).slice(0, limit);
+    }
+  }
+  if (!partial || Object.hasOwn(payload, 'sort_order')) result.sort_order = clamp(Math.floor(Number(payload.sort_order) || 0), 0, 9999);
+  if (!partial || Object.hasOwn(payload, 'is_active')) result.is_active = Number(payload.is_active) === 0 ? 0 : 1;
+  if (!partial && !result.name) throw Object.assign(new Error('缺少必填字段：name'), { statusCode: 400 });
+  if (partial && Object.hasOwn(result, 'name') && !result.name) throw Object.assign(new Error('节点名称不能为空'), { statusCode: 400 });
+  return result;
+}
+
+function normalizeIndustryConstituent(payload = {}, partial = false) {
+  const result = {};
+  if (!partial || Object.hasOwn(payload, 'node_id')) result.node_id = Math.max(0, Math.floor(Number(payload.node_id) || 0));
+  if (!partial || Object.hasOwn(payload, 'stock_code')) result.stock_code = cleanString(payload.stock_code).replace(/^(sh|sz|bj)/i, '').slice(0, 16);
+  for (const key of ['stock_name', 'role', 'description']) {
+    if (!partial || Object.hasOwn(payload, key)) {
+      const limit = key === 'stock_name' ? 80 : (key === 'role' ? 40 : 1200);
+      result[key] = cleanString(payload[key]).slice(0, limit);
+    }
+  }
+  if (!partial || Object.hasOwn(payload, 'sort_order')) result.sort_order = clamp(Math.floor(Number(payload.sort_order) || 0), 0, 9999);
+  if (!partial || Object.hasOwn(payload, 'is_active')) result.is_active = Number(payload.is_active) === 0 ? 0 : 1;
+  if (!partial && !result.node_id) throw Object.assign(new Error('请选择所属产业链节点'), { statusCode: 400 });
+  if (!partial && !result.stock_name) throw Object.assign(new Error('缺少必填字段：stock_name'), { statusCode: 400 });
+  if (partial && Object.hasOwn(result, 'stock_name') && !result.stock_name) throw Object.assign(new Error('标的名称不能为空'), { statusCode: 400 });
+  return result;
+}
+
+function assertManualIndustrySource(source = 'manual') {
+  if (source !== 'manual') {
+    throw Object.assign(new Error(`产业链地图仅允许人工维护（来源 ${source} 被拒绝，见 AGENTS.md §2.1）`), { statusCode: 403 });
+  }
+}
+
 class InvestmentStore {
   constructor(databasePath = process.env.INVESTMENT_DB_PATH || DEFAULT_DB_PATH) {
     this.databasePath = databasePath;
@@ -530,6 +656,39 @@ class InvestmentStore {
         updated_at TEXT NOT NULL DEFAULT ''
       );
 
+      CREATE TABLE IF NOT EXISTS kai_invest_industry_node (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        parent_id INTEGER NOT NULL DEFAULT 0,
+        name TEXT NOT NULL,
+        description TEXT NOT NULL DEFAULT '',
+        research_note TEXT NOT NULL DEFAULT '',
+        risk_note TEXT NOT NULL DEFAULT '',
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS kai_invest_industry_node_parent_idx
+        ON kai_invest_industry_node (parent_id, is_active, sort_order, id);
+
+      CREATE TABLE IF NOT EXISTS kai_invest_industry_constituent (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        node_id INTEGER NOT NULL,
+        stock_code TEXT NOT NULL DEFAULT '',
+        stock_name TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT '核心标的',
+        description TEXT NOT NULL DEFAULT '',
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (node_id) REFERENCES kai_invest_industry_node(id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS kai_invest_industry_constituent_node_idx
+        ON kai_invest_industry_constituent (node_id, is_active, sort_order, id);
+      CREATE INDEX IF NOT EXISTS kai_invest_industry_constituent_code_idx
+        ON kai_invest_industry_constituent (stock_code, is_active);
+
       CREATE TABLE IF NOT EXISTS kai_invest_operation_log (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         category TEXT NOT NULL DEFAULT 'system',
@@ -591,6 +750,7 @@ class InvestmentStore {
     });
     this.migrateDropPortfolioCurrentPrice();
     this.seed();
+    this.seedIndustryMap();
   }
 
   ensureColumns(table, columns) {
@@ -762,6 +922,172 @@ class InvestmentStore {
         },
       ]) this.create('sectors', item);
     }
+  }
+
+  seedIndustryMap() {
+    const existing = this.db.prepare('SELECT COUNT(*) AS count FROM kai_invest_industry_node').get().count;
+    if (existing) return;
+    const timestamp = nowIso();
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      const insertNode = this.db.prepare(`
+        INSERT INTO kai_invest_industry_node (
+          parent_id, name, description, research_note, risk_note, sort_order, is_active, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)
+      `);
+      const insertConstituent = this.db.prepare(`
+        INSERT INTO kai_invest_industry_constituent (
+          node_id, stock_code, stock_name, role, description, sort_order, is_active, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)
+      `);
+      const root = COMMERCIAL_SPACE_TEMPLATE.root;
+      const rootId = Number(insertNode.run(0, root.name, root.description, root.research_note, root.risk_note, 10, timestamp, timestamp).lastInsertRowid);
+      COMMERCIAL_SPACE_TEMPLATE.branches.forEach((branch, branchIndex) => {
+        const branchId = Number(insertNode.run(rootId, branch.name, branch.description, '', '', (branchIndex + 1) * 100, timestamp, timestamp).lastInsertRowid);
+        branch.children.forEach((child, childIndex) => {
+          const childId = Number(insertNode.run(branchId, child.name, child.description, '', '', (childIndex + 1) * 100, timestamp, timestamp).lastInsertRowid);
+          child.stocks.forEach(([stockName, stockCode, role, description], stockIndex) => {
+            insertConstituent.run(childId, stockCode, stockName, role, description, (stockIndex + 1) * 100, timestamp, timestamp);
+          });
+        });
+      });
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+
+  listIndustryNodes(options = {}) {
+    const includeInactive = Boolean(options.includeInactive);
+    return this.db.prepare(`
+      SELECT * FROM kai_invest_industry_node
+      ${includeInactive ? '' : 'WHERE is_active = 1'}
+      ORDER BY parent_id, sort_order, id
+    `).all();
+  }
+
+  getIndustryNode(id) {
+    return this.db.prepare('SELECT * FROM kai_invest_industry_node WHERE id = ?').get(Number(id)) || null;
+  }
+
+  createIndustryNode(payload = {}, options = {}) {
+    assertManualIndustrySource(options.source || 'manual');
+    const values = normalizeIndustryNode(payload);
+    if (values.parent_id && !this.getIndustryNode(values.parent_id)) {
+      throw Object.assign(new Error('上级产业链节点不存在'), { statusCode: 400 });
+    }
+    const timestamp = nowIso();
+    const result = this.db.prepare(`
+      INSERT INTO kai_invest_industry_node (
+        parent_id, name, description, research_note, risk_note, sort_order, is_active, created_at, updated_at
+      ) VALUES (
+        :parent_id, :name, :description, :research_note, :risk_note, :sort_order, :is_active, :created_at, :updated_at
+      )
+    `).run({ ...values, created_at: timestamp, updated_at: timestamp });
+    return this.getIndustryNode(Number(result.lastInsertRowid));
+  }
+
+  updateIndustryNode(id, payload = {}, options = {}) {
+    assertManualIndustrySource(options.source || 'manual');
+    const current = this.getIndustryNode(id);
+    if (!current) throw Object.assign(new Error('产业链节点不存在'), { statusCode: 404 });
+    const values = normalizeIndustryNode(payload, true);
+    if (!Object.keys(values).length) return current;
+    const parentId = Object.hasOwn(values, 'parent_id') ? values.parent_id : current.parent_id;
+    if (parentId === Number(id)) throw Object.assign(new Error('节点不能设为自己的上级'), { statusCode: 400 });
+    if (parentId) {
+      let cursor = this.getIndustryNode(parentId);
+      if (!cursor) throw Object.assign(new Error('上级产业链节点不存在'), { statusCode: 400 });
+      while (cursor) {
+        if (cursor.id === Number(id)) throw Object.assign(new Error('不能将节点移动到自己的下级节点'), { statusCode: 400 });
+        cursor = cursor.parent_id ? this.getIndustryNode(cursor.parent_id) : null;
+      }
+    }
+    values.updated_at = nowIso();
+    const assignments = Object.keys(values).map((key) => `${key} = :${key}`);
+    this.db.prepare(`UPDATE kai_invest_industry_node SET ${assignments.join(', ')} WHERE id = :id`).run({ ...values, id: Number(id) });
+    return this.getIndustryNode(id);
+  }
+
+  deleteIndustryNode(id, options = {}) {
+    assertManualIndustrySource(options.source || 'manual');
+    const current = this.getIndustryNode(id);
+    if (!current) throw Object.assign(new Error('产业链节点不存在'), { statusCode: 404 });
+    const all = this.db.prepare('SELECT id, parent_id FROM kai_invest_industry_node').all();
+    const childMap = new Map();
+    for (const row of all) {
+      const children = childMap.get(row.parent_id) || [];
+      children.push(row.id);
+      childMap.set(row.parent_id, children);
+    }
+    const ids = [];
+    const collect = (nodeId) => {
+      ids.push(nodeId);
+      for (const childId of childMap.get(nodeId) || []) collect(childId);
+    };
+    collect(Number(id));
+    const marks = ids.map(() => '?').join(', ');
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      this.db.prepare(`DELETE FROM kai_invest_industry_constituent WHERE node_id IN (${marks})`).run(...ids);
+      this.db.prepare(`DELETE FROM kai_invest_industry_node WHERE id IN (${marks})`).run(...ids);
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+    return { ...current, deleted_node_count: ids.length };
+  }
+
+  listIndustryConstituents(options = {}) {
+    const includeInactive = Boolean(options.includeInactive);
+    return this.db.prepare(`
+      SELECT * FROM kai_invest_industry_constituent
+      ${includeInactive ? '' : 'WHERE is_active = 1'}
+      ORDER BY node_id, sort_order, id
+    `).all();
+  }
+
+  getIndustryConstituent(id) {
+    return this.db.prepare('SELECT * FROM kai_invest_industry_constituent WHERE id = ?').get(Number(id)) || null;
+  }
+
+  createIndustryConstituent(payload = {}, options = {}) {
+    assertManualIndustrySource(options.source || 'manual');
+    const values = normalizeIndustryConstituent(payload);
+    if (!this.getIndustryNode(values.node_id)) throw Object.assign(new Error('所属产业链节点不存在'), { statusCode: 400 });
+    const timestamp = nowIso();
+    const result = this.db.prepare(`
+      INSERT INTO kai_invest_industry_constituent (
+        node_id, stock_code, stock_name, role, description, sort_order, is_active, created_at, updated_at
+      ) VALUES (
+        :node_id, :stock_code, :stock_name, :role, :description, :sort_order, :is_active, :created_at, :updated_at
+      )
+    `).run({ ...values, created_at: timestamp, updated_at: timestamp });
+    return this.getIndustryConstituent(Number(result.lastInsertRowid));
+  }
+
+  updateIndustryConstituent(id, payload = {}, options = {}) {
+    assertManualIndustrySource(options.source || 'manual');
+    const current = this.getIndustryConstituent(id);
+    if (!current) throw Object.assign(new Error('核心标的不存在'), { statusCode: 404 });
+    const values = normalizeIndustryConstituent(payload, true);
+    if (!Object.keys(values).length) return current;
+    const nodeId = Object.hasOwn(values, 'node_id') ? values.node_id : current.node_id;
+    if (!this.getIndustryNode(nodeId)) throw Object.assign(new Error('所属产业链节点不存在'), { statusCode: 400 });
+    values.updated_at = nowIso();
+    const assignments = Object.keys(values).map((key) => `${key} = :${key}`);
+    this.db.prepare(`UPDATE kai_invest_industry_constituent SET ${assignments.join(', ')} WHERE id = :id`).run({ ...values, id: Number(id) });
+    return this.getIndustryConstituent(id);
+  }
+
+  deleteIndustryConstituent(id, options = {}) {
+    assertManualIndustrySource(options.source || 'manual');
+    const current = this.getIndustryConstituent(id);
+    if (!current) throw Object.assign(new Error('核心标的不存在'), { statusCode: 404 });
+    this.db.prepare('DELETE FROM kai_invest_industry_constituent WHERE id = ?').run(Number(id));
+    return current;
   }
 
   list(resource, filters = {}) {

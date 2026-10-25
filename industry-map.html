@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light">
+  <title>产业链地图 · AI 辅助投资系统</title>
+  <link rel="stylesheet" href="/industry-map.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="back-link" href="/investment-dashboard.html">← 返回看板</a>
+    <div class="title-block">
+      <p class="eyebrow">盘后研究 · 人工维护</p>
+      <h1>产业链地图</h1>
+      <p>沿着产业链研究逻辑，而不是把涨跌当作结论。</p>
+    </div>
+    <div class="top-actions">
+      <a class="quiet-button" href="/sector-graph.html">交叉关系图</a>
+      <button class="quiet-button" type="button" data-action="refresh-quotes">刷新地图行情</button>
+      <button class="solid-button" type="button" data-action="add-node">新增节点</button>
+    </div>
+  </header>
+
+  <main class="page-shell">
+    <section class="map-intro" aria-label="地图说明">
+      <div id="summary" class="summary"></div>
+      <p id="map-note" class="map-note"></p>
+    </section>
+
+    <section class="workspace" aria-label="产业链地图工作区">
+      <div class="tree-panel">
+        <div class="tree-panel-head">
+          <div>
+            <p class="eyebrow">层级浏览</p>
+            <h2>产业链脉络</h2>
+          </div>
+          <button class="text-button" type="button" data-action="expand-all">展开全部</button>
+        </div>
+        <div id="tree" class="tree" aria-live="polite"></div>
+      </div>
+      <aside id="detail" class="detail-panel" aria-live="polite"></aside>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <dialog id="node-dialog" class="editor-dialog">
+    <form id="node-form" method="dialog">
+      <div class="dialog-head">
+        <div><p class="eyebrow">人工维护</p><h2 id="node-dialog-title">新增产业链节点</h2></div>
+        <button class="icon-button" type="button" data-action="close-dialog" aria-label="关闭">×</button>
+      </div>
+      <input type="hidden" name="id">
+      <label>上级节点<select name="parent_id" id="node-parent"></select></label>
+      <label>节点名称<input name="name" required maxlength="80" placeholder="例如：卫星互联网与通信"></label>
+      <label>简要说明<textarea name="description" rows="3" maxlength="2400" placeholder="该环节做什么、研究时重点看什么"></textarea></label>
+      <label>研究逻辑<textarea name="research_note" rows="3" maxlength="2400" placeholder="人工记录研究线索，不生成交易建议"></textarea></label>
+      <label>风险提示<textarea name="risk_note" rows="3" maxlength="2400" placeholder="例如订单、进度、估值或主题波动风险"></textarea></label>
+      <label>排序（数字越小越靠前）<input name="sort_order" type="number" min="0" max="9999" value="0"></label>
+      <div class="dialog-actions"><button class="quiet-button" type="button" data-action="close-dialog">取消</button><button class="solid-button" value="default">保存节点</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="stock-dialog" class="editor-dialog">
+    <form id="stock-form" method="dialog">
+      <div class="dialog-head">
+        <div><p class="eyebrow">人工维护</p><h2 id="stock-dialog-title">新增核心标的</h2></div>
+        <button class="icon-button" type="button" data-action="close-dialog" aria-label="关闭">×</button>
+      </div>
+      <input type="hidden" name="id">
+      <label>所属产业链节点<select name="node_id" id="stock-node" required></select></label>
+      <div class="field-row"><label>标的名称<input name="stock_name" required maxlength="80" placeholder="例如：中国卫通"></label><label>股票代码<input name="stock_code" maxlength="16" inputmode="numeric" placeholder="例如：601698"></label></div>
+      <div class="field-row"><label>定位<select name="role"><option>核心标的</option><option>关注标的</option><option>观察标的</option></select></label><label>排序<input name="sort_order" type="number" min="0" max="9999" value="0"></label></div>
+      <label>说明<textarea name="description" rows="4" maxlength="1200" placeholder="说明它与该细分方向的关联；不填写买卖结论"></textarea></label>
+      <div class="dialog-actions"><button class="quiet-button" type="button" data-action="close-dialog">取消</button><button class="solid-button" value="default">保存标的</button></div>
+    </form>
+  </dialog>
+  <script src="/industry-map.js"></script>
+</body>
+</html>

@@ -288,6 +288,81 @@ function buildSectorGraph(store) {
   };
 }
 
+// 产业链地图：人工维护的层级与核心标的，行情只读自客观的股票快照。
+// 节点均幅仅由其所有后代标的的可用当日涨跌幅计算，不将该均幅伪装成官方行业指数。
+function buildIndustryMap(store) {
+  const nodes = store.listIndustryNodes();
+  const constituents = store.listIndustryConstituents();
+  const quoteByCode = new Map(store.listQuotes().map((quote) => [normalizeStockCode(quote.stock_code), quote]));
+  const childrenByParent = new Map();
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
+  const constituentsByNode = new Map();
+
+  for (const node of nodes) {
+    const parentId = nodeById.has(node.parent_id) ? node.parent_id : 0;
+    const children = childrenByParent.get(parentId) || [];
+    children.push(node);
+    childrenByParent.set(parentId, children);
+  }
+  for (const item of constituents) {
+    const items = constituentsByNode.get(item.node_id) || [];
+    const quote = quoteByCode.get(normalizeStockCode(item.stock_code));
+    items.push({
+      ...item,
+      quote: quote && Number(quote.price) > 0 ? {
+        price: Number(quote.price),
+        changePct: Number.isFinite(Number(quote.change_pct)) ? Number(quote.change_pct) : null,
+        observedAt: quote.observed_at || quote.updated_at || '',
+      } : null,
+    });
+    constituentsByNode.set(item.node_id, items);
+  }
+  const sortItems = (items) => items.sort((a, b) => (a.sort_order - b.sort_order) || (a.id - b.id));
+  for (const items of childrenByParent.values()) sortItems(items);
+  for (const items of constituentsByNode.values()) sortItems(items);
+
+  function makeNode(node, depth = 0) {
+    const children = (childrenByParent.get(node.id) || []).map((item) => makeNode(item, depth + 1));
+    const coreStocks = constituentsByNode.get(node.id) || [];
+    const quoteValues = [
+      ...coreStocks.map((item) => item.quote?.changePct).filter(Number.isFinite),
+      ...children.flatMap((item) => item.quoteValues),
+    ];
+    const allStocks = coreStocks.length + children.reduce((sum, item) => sum + item.stockCount, 0);
+    const quoteCount = coreStocks.filter((item) => Number.isFinite(item.quote?.changePct)).length
+      + children.reduce((sum, item) => sum + item.quoteCount, 0);
+    const averageChangePct = quoteValues.length
+      ? Math.round((quoteValues.reduce((sum, value) => sum + value, 0) / quoteValues.length) * 100) / 100
+      : null;
+    return {
+      ...node,
+      depth,
+      children,
+      constituents: coreStocks,
+      stockCount: allStocks,
+      quoteCount,
+      quoteValues,
+      averageChangePct,
+    };
+  }
+
+  const roots = (childrenByParent.get(0) || []).map((node) => makeNode(node));
+  const activeQuotes = constituents.filter((item) => {
+    const quote = quoteByCode.get(normalizeStockCode(item.stock_code));
+    return quote && Number(quote.price) > 0 && Number.isFinite(Number(quote.change_pct));
+  });
+  return {
+    generatedAt: new Date().toISOString(),
+    roots,
+    summary: {
+      nodeCount: nodes.length,
+      coreStockCount: constituents.length,
+      quoteCount: activeQuotes.length,
+    },
+    note: '产业链层级、说明和核心标的仅由人工维护；当日涨跌幅来自 kai_invest_stock_quote。板块均幅为地图内核心标的的简单平均，不是官方行业指数。',
+  };
+}
+
 function buildOverview(store) {
   const portfolio = store.list('portfolio');
   const holdings = portfolio
@@ -712,6 +787,7 @@ async function createDailyAnalysis(store, options = {}) {
 module.exports = {
   buildOverview,
   buildSectorGraph,
+  buildIndustryMap,
   createDailyAnalysis,
   getVideoResearchLibrary,
   summarizeVideoEvidence,

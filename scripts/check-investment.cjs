@@ -11,6 +11,7 @@ const {
 } = require('../gold-market.cjs');
 const {
   buildOverview,
+  buildIndustryMap,
   createDailyAnalysis,
   getVideoResearchLibrary,
 } = require('../investment-analysis.cjs');
@@ -27,6 +28,8 @@ async function main() {
     assert.deepEqual(tables, [
       'kai_invest_daily_review',
       'kai_invest_decision',
+      'kai_invest_industry_constituent',
+      'kai_invest_industry_node',
       'kai_invest_market',
       'kai_invest_operation_log',
       'kai_invest_portfolio',
@@ -35,6 +38,22 @@ async function main() {
       'kai_invest_stock_quote',
       'kai_invest_trade_log',
     ]);
+
+    // 产业链地图：首次建库内置可编辑的商业航天模板；层级与标的均为人工维护数据，行情只读快照。
+    const industryMap = buildIndustryMap(store);
+    const commercialSpace = industryMap.roots.find((item) => item.name === '商业航天');
+    assert.ok(commercialSpace, '应内置商业航天产业链根节点');
+    assert.ok(commercialSpace.children.length >= 6, '商业航天应包含六条研究主线');
+    assert.ok(commercialSpace.stockCount > 0, '模板应包含核心标的');
+    const customNode = store.createIndustryNode({ parent_id: commercialSpace.id, name: '自检细分方向', description: '自检说明' });
+    const customStock = store.createIndustryConstituent({ node_id: customNode.id, stock_name: '自检标的', stock_code: '000001', role: '核心标的' });
+    store.saveQuotes([{ stock_code: '000001', stock_name: '自检标的', price: 12, change_pct: 2.5 }]);
+    const mapWithQuote = buildIndustryMap(store);
+    const mappedCustomNode = (() => { let found = null; const visit = (items) => (items || []).forEach((item) => { if (item.id === customNode.id) found = item; visit(item.children); }); visit(mapWithQuote.roots); return found; })();
+    assert.equal(mappedCustomNode.averageChangePct, 2.5);
+    assert.equal(mappedCustomNode.constituents[0].id, customStock.id);
+    assert.throws(() => store.createIndustryNode({ name: '越权节点' }, { source: 'analyze' }), /仅允许人工维护/);
+    store.deleteIndustryNode(customNode.id);
 
     const holding = store.create('portfolio', {
       list_type: 'holding',
@@ -217,8 +236,13 @@ async function main() {
     assert.ok(dashboardJs, 'dashboard.js 应存在');
     // dashboard.js 语法检查（拆分后不再有内联 script）
     new Function(dashboardJs);
+    const industryMapHtml = fs.readFileSync(path.join(__dirname, '..', 'industry-map.html'), 'utf8');
+    const industryMapJs = fs.readFileSync(path.join(__dirname, '..', 'industry-map.js'), 'utf8');
+    assert.ok(industryMapHtml.includes('/industry-map.js'));
+    assert.ok(industryMapJs.includes('/api/investment/industry-map'));
+    new Function(industryMapJs);
 
-    console.log('检查通过：9 张前缀表、CRUD、运行日志、今日复盘、持仓变更闭环、总览聚合、黄金行情、规则日报、视频证据和页面脚本');
+    console.log('检查通过：11 张前缀表、产业链地图、CRUD、运行日志、今日复盘、持仓变更闭环、总览聚合、黄金行情、规则日报、视频证据和页面脚本');
   } finally {
     store.close();
     fs.rmSync(tempDir, { recursive: true, force: true });

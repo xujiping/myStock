@@ -29,6 +29,7 @@ const { collectQuotes } = require('./scripts/collect-quotes.cjs');
 const {
   buildOverview,
   buildSectorGraph,
+  buildIndustryMap,
   createDailyAnalysis,
   getVideoResearchLibrary,
   summarizeVideoEvidence,
@@ -672,6 +673,36 @@ function createAppServer(options = {}) {
         sendJson(res, 200, buildSectorGraph(store));
         return;
       }
+      if (pathname === '/api/investment/industry-map' && req.method === 'GET') {
+        sendJson(res, 200, buildIndustryMap(store));
+        return;
+      }
+      if (pathname === '/api/investment/industry-nodes' && req.method === 'POST') {
+        sendJson(res, 201, store.createIndustryNode(await readJsonBody(req)));
+        return;
+      }
+      const industryNodeMatch = pathname.match(/^\/api\/investment\/industry-nodes\/(\d+)$/);
+      if (industryNodeMatch && req.method === 'PUT') {
+        sendJson(res, 200, store.updateIndustryNode(industryNodeMatch[1], await readJsonBody(req)));
+        return;
+      }
+      if (industryNodeMatch && req.method === 'DELETE') {
+        sendJson(res, 200, store.deleteIndustryNode(industryNodeMatch[1]));
+        return;
+      }
+      if (pathname === '/api/investment/industry-constituents' && req.method === 'POST') {
+        sendJson(res, 201, store.createIndustryConstituent(await readJsonBody(req)));
+        return;
+      }
+      const industryConstituentMatch = pathname.match(/^\/api\/investment\/industry-constituents\/(\d+)$/);
+      if (industryConstituentMatch && req.method === 'PUT') {
+        sendJson(res, 200, store.updateIndustryConstituent(industryConstituentMatch[1], await readJsonBody(req)));
+        return;
+      }
+      if (industryConstituentMatch && req.method === 'DELETE') {
+        sendJson(res, 200, store.deleteIndustryConstituent(industryConstituentMatch[1]));
+        return;
+      }
             if (pathname === '/api/investment/operation-logs' && req.method === 'GET') {
         const items = store.listOperationLogs({
           category: requestUrl.searchParams.get('category') || '',
@@ -1015,10 +1046,15 @@ function createAppServer(options = {}) {
         sendFile(req, res, path.join(ROOT, 'sector-graph.html'));
         return;
       }
-            if (pathname === '/dashboard.css' || pathname === '/dashboard.js' || pathname === '/sector-graph.js') {
+      if (pathname === '/dashboard.css' || pathname === '/dashboard.js' || pathname === '/sector-graph.js'
+        || pathname === '/industry-map.css' || pathname === '/industry-map.js') {
         const filePath = safeResolve(ROOT, pathname.slice(1));
         if (!filePath) throw Object.assign(new Error('禁止访问该路径'), { statusCode: 403 });
         sendFile(req, res, filePath);
+        return;
+      }
+      if (pathname === '/industry-map.html') {
+        sendFile(req, res, path.join(ROOT, 'industry-map.html'));
         return;
       }
       if (pathname === '/legacy') {

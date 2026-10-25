@@ -80,6 +80,14 @@ npm run restart -- --all     # 停止所有 serve 实例后重启主看板
 - 行情显示投资库行情快照（`kai_invest_stock_quote`），点「⟳ 刷新」调用系统行情刷新接口后重载；无行情公司显示「—」。
 - 页面只读：图谱中的删除/重置仅在当前浏览器会话内生效，不写回数据库。
 
+### 产业链地图（盘后研究）
+
+- 独立页面 `http://127.0.0.1:4173/industry-map.html`（看板侧边栏「研究依据 → 产业链地图」进入）。默认内置可编辑的商业航天模板：火箭与发射服务、卫星制造与载荷、卫星互联网与通信、地面系统与测控、遥感应用与数据服务、材料/结构件/测试六条主线。
+- 产业链节点支持继续展开至细分方向；每个细分方向可维护多个核心、关注或观察标的。标的可重复归属不同节点，用于呈现交叉产业链位置。
+- 节点说明、研究逻辑、风险提示与标的归属均为**人工维护**；AI 与采集脚本不会写入或覆盖。页面内的新增、编辑、删除会写入本地数据库。
+- 标的当日涨跌幅来自 `kai_invest_stock_quote`；节点涨跌幅是其全部后代标的的简单平均，明确标注为「地图内核心标的均幅」，不是官方行业指数。无行情显示「—」。
+- 「刷新地图行情」只刷新地图中填写了 6 位股票代码的标的；点击「交叉关系图」可继续查看持仓、关注股与板块间的多对多关系。
+
 ### 宏观变量
 
 - 记录当前事实、最近变化、短期影响、中期影响和应对动作。
@@ -128,7 +136,7 @@ LLM_TIMEOUT_MS=60000
 
 ## 数据库
 
-当前共 9 张 SQLite 表，全部带项目专属前缀：
+当前共 11 张 SQLite 表，全部带项目专属前缀：
 
 ```text
 kai_invest_portfolio       # 持仓 + 关注列表（list_type 区分 holding / watch）
@@ -139,12 +147,15 @@ kai_invest_trade_log       # 交易记录（真实买卖，人工录入）
 kai_invest_daily_review    # 每日复盘步骤、七步短线笔记（framework_notes_json）与行动项
 kai_invest_stock_fundamentals  # 持仓股财务指标（阿里云计费接口）
 kai_invest_stock_quote     # 个股行情快照（新浪，仅客观行情）
+kai_invest_industry_node   # 产业链层级节点（仅人工维护）
+kai_invest_industry_constituent # 节点与核心标的归属（仅人工维护）
 kai_invest_operation_log   # 系统运行日志
 ```
 
 - `kai_invest_portfolio` 用 `list_type` 区分持仓（holding）和关注列表（watch）。
 - `kai_invest_market` 用 `record_type` 区分账户、市场环境和宏观变量。
 - AI 日报和人工观点统一进入 `kai_invest_decision`，便于按时间复盘。
+- 产业链地图将结构、说明和核心标的写入 `kai_invest_industry_node` / `kai_invest_industry_constituent`；当日涨跌幅仅从 `kai_invest_stock_quote` 读取。
 - 各表写入权限（采集 / AI 分析 / 人工）见 `AGENTS.md`「系统边界与写入权限」。
 - 数据与 AI 分析新鲜度：看板按交易日标记年龄（市场/板块 2 个交易日、宏观 5 个交易日），超期显示「已过期」徽标并引导重新采集/重新分析；过期结论不会呈现为当前建议。
 - 采纳板块 AI 参考建议会写入系统运行日志（`adopt-ai-analysis`），记录前后评级/状态与 AI 来源，可追溯、可复盘。
